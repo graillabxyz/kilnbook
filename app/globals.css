@@ -1748,38 +1748,10 @@ button:disabled {
   text-align: right;
 }
 
-.kb-public-card p,
-.kb-landing-preview p {
+.kb-public-card p {
   margin: 0;
   color: var(--kb-muted);
   line-height: 1.5;
-}
-
-.kb-product-shot {
-  min-height: 12rem;
-  display: grid;
-  grid-template-columns: 4rem 1fr;
-  gap: 0.6rem;
-  margin: 0.8rem 0;
-  border: 1px solid var(--kb-line);
-  border-radius: 8px;
-  background: #fffdf9;
-  padding: 0.6rem;
-}
-
-.kb-shot-sidebar {
-  border-radius: 7px;
-  background: linear-gradient(180deg, var(--kb-cobalt), #203f46);
-}
-
-.kb-shot-main {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.kb-shot-main span {
-  border-radius: 7px;
-  background: linear-gradient(90deg, #f2e7db, #d8c7b7);
 }
 
 .kb-checklist span {

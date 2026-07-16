@@ -2341,7 +2341,6 @@ function HomeScreen({
         </div>
       </section>
       <aside className="kb-stack kb-home-rail">
-        <MarketingLandingPreview />
         <AuthOnboardingPreview
           viewer={viewer}
           authStatus={authStatus}
@@ -4195,40 +4194,6 @@ function LibraryScreen({
         <button type="button" onClick={() => onViewChange("Kilns")}>
           <LibraryCard title="Kilns" eyebrow={`${kilns.length} profiles`} detail="Specs and maintenance" color={BRAND_COLORS.cobalt} />
         </button>
-      </div>
-    </section>
-  );
-}
-
-function MarketingLandingPreview() {
-  return (
-    <section className="kb-panel kb-landing-preview">
-      <div className="kb-logo-heading">
-        <Image src={BRAND_ASSETS.logo} alt="" width={58} height={58} />
-        <div>
-          <p className="kb-kicker">Public landing page</p>
-          <Image
-            className="kb-wordmark-large"
-            src={BRAND_ASSETS.wordmark}
-            alt={PRODUCT.name}
-            width={236}
-            height={39}
-          />
-        </div>
-      </div>
-      <p>{PRODUCT.description}</p>
-      <div className="kb-product-shot" aria-label="Product screenshot mockup">
-        <div className="kb-shot-sidebar" />
-        <div className="kb-shot-main">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-      <div className="kb-chip-row">
-        <span className="kb-chip">Firing journal</span>
-        <span className="kb-chip">Glaze results</span>
-        <span className="kb-chip">Private recipes</span>
       </div>
     </section>
   );
