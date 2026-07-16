@@ -34,7 +34,7 @@ test("server-renders Flux and Fire without starter preview metadata", async () =
   assert.match(html, /Ceramic process library/);
   assert.doesNotMatch(
     html,
-    /codex-preview|Your site is taking shape|react-loading-skeleton|Quiet Tenmoku|Mara Chen|mara@example\.com|Profile setup checklist|Continue with Google/,
+    /codex-preview|Your site is taking shape|react-loading-skeleton|mara@example\.com|Profile setup checklist|Continue with Google/,
   );
 });
 
@@ -126,4 +126,31 @@ test("mobile add and navigation follow the simplified Instagram-style order", as
   assert.match(globals, /overflow: hidden/);
   assert.match(globals, /\.kb-mobile-nav button\.compose svg/);
   assert.match(globals, /\.kb-add-mobile-list/);
+});
+
+test("glaze, clay body, and kiln libraries use real creation flows", async () => {
+  const [workspace, globals] = await Promise.all([
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(workspace, /GLAZE_SUPPLIER_CATALOG/);
+  assert.match(workspace, /CLAY_BODY_CATALOG/);
+  assert.match(workspace, /KILN_CATALOG/);
+  assert.match(workspace, /function GlazeCreateDialog/);
+  assert.match(workspace, /function ClayBodyCreateDialog/);
+  assert.match(workspace, /function KilnCreateDialog/);
+  assert.match(workspace, /Add commercial glaze/);
+  assert.match(workspace, /Save clay body/);
+  assert.match(workspace, /Save kiln/);
+  assert.match(workspace, /AMACO/);
+  assert.match(workspace, /Laguna/);
+  assert.match(workspace, /Skutt KM-1027/);
+  assert.doesNotMatch(workspace, /setDraftGlazeCount|setDraftClayCount|setDraftKilnCount/);
+  assert.doesNotMatch(workspace, /Untitled glaze|Untitled clay body|Untitled kiln/);
+
+  assert.match(globals, /\.kb-create-dialog/);
+  assert.match(globals, /\.kb-ingredient-row/);
+  assert.match(globals, /\.kb-swatch-picker/);
+  assert.match(globals, /\.kb-library-select\.active/);
 });

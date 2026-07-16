@@ -28,7 +28,7 @@ import type {
 } from "../domain";
 import { readClientSupabaseEnv } from "../env";
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
 
 export interface KilnbookWorkspaceSnapshot {
   viewer: Profile;
@@ -92,6 +92,10 @@ function text(value: unknown, fallback = "") {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
+function optionalText(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function numberValue(value: unknown, fallback = 0) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
@@ -125,16 +129,16 @@ function mapProfile(row: Row, authDetails?: Row): Profile {
     displayName: text(row.display_name, "Ceramic artist"),
     username: text(row.username, "artist"),
     avatarColor: hashColor(row.username),
-    avatarUrl: row.avatar_url ?? undefined,
+    avatarUrl: optionalText(row.avatar_url),
     biography: text(row.biography),
     profileType: text(row.profile_type, "artist") as ProfileType,
-    identityLabel: row.identity_label ?? undefined,
-    email: authDetails?.email ?? undefined,
+    identityLabel: optionalText(row.identity_label),
+    email: optionalText(authDetails?.email),
     authProvider: authProviderValue(authDetails?.auth_provider),
-    authProviderId: authDetails?.auth_provider_id ?? undefined,
+    authProviderId: optionalText(authDetails?.auth_provider_id),
     emailVerified: Boolean(authDetails?.email_verified),
-    locationLabel: row.approximate_location ?? undefined,
-    website: row.website ?? undefined,
+    locationLabel: optionalText(row.approximate_location),
+    website: optionalText(row.website),
     specialties: arrayValue(row.ceramic_specialties),
     preferredTemperatureUnit: text(row.preferred_temperature_unit, "c") as TemperatureUnit,
     preferredWeightUnit: text(row.preferred_weight_unit, "g") as WeightUnit,
@@ -226,7 +230,7 @@ function mapFiring(row: Row): FiringRecord {
   return {
     id: text(row.id),
     ownerId: text(row.owner_id),
-    studioId: row.studio_id ?? undefined,
+    studioId: optionalText(row.studio_id),
     title: text(row.title, "Untitled firing"),
     readableNumber: text(row.readable_number, "Firing"),
     kilnId: text(row.kiln_id),
@@ -236,13 +240,13 @@ function mapFiring(row: Row): FiringRecord {
     status: text(row.status, "draft") as FiringRecord["status"],
     visibility: visibilityValue(row.visibility),
     plannedStartAt: text(row.planned_start_at, text(row.created_at, new Date().toISOString())),
-    actualStartAt: row.actual_start_at ?? undefined,
-    actualEndAt: row.actual_end_at ?? undefined,
+    actualStartAt: optionalText(row.actual_start_at),
+    actualEndAt: optionalText(row.actual_end_at),
     timezone: text(row.timezone, "UTC"),
     leadFirer: text(row.lead_firer_id, "Unknown"),
     targetTemperatureC: numberValue(row.target_temperature_c, 1222),
     targetCone: text(row.target_cone, "6"),
-    witnessConeResult: row.witness_cone_result ?? undefined,
+    witnessConeResult: optionalText(row.witness_cone_result),
     atmosphere: text(row.firing_atmosphere, "unknown") as AtmosphereType,
     loadFullnessPercentage: numberValue(row.load_fullness_percentage, 0),
     totalHeatingMinutes: row.total_heating_minutes == null ? undefined : numberValue(row.total_heating_minutes),
@@ -290,7 +294,7 @@ function mapPost(
     authorUsername: author?.username ?? "artist",
     body: text(row.body),
     createdAt: text(row.created_at, new Date().toISOString()),
-    editedAt: row.edited_at ?? undefined,
+    editedAt: optionalText(row.edited_at),
     visibility: visibilityValue(row.visibility),
     linkedFiringId: firingIds[0],
     linkedGlazeId: glazeIds[0],
@@ -308,7 +312,7 @@ function mapPost(
     saves: 0,
     uniqueInteractors: likesByPost.get(postId) ?? 0,
     viewerLiked: false,
-    locationLabel: row.broad_location ?? undefined,
+    locationLabel: optionalText(row.broad_location),
   };
 }
 

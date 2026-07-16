@@ -33,7 +33,6 @@ import {
   ShieldCheck,
   Sparkles,
   Square,
-  Star,
   Thermometer,
   Upload,
   UserRound,
@@ -64,11 +63,13 @@ import type {
   FiringEnvironmentRecord,
   FiringRecord,
   FiringType,
+  GlazeRecipeVersion,
   GlazeProfile,
   KilnLocation,
   KilnProfile,
   Post,
   Profile,
+  RecipeIngredient,
   Visibility,
 } from "@/lib/domain";
 import { getEntitlementDecision } from "@/lib/entitlements";
@@ -146,6 +147,64 @@ type LiveFiringSetupPayload = {
   atmosphere: AtmosphereType;
   environment: FiringEnvironmentPayload;
 };
+type CreatedGlazeRecord = {
+  profile: GlazeProfile;
+  recipeVersion: GlazeRecipeVersion;
+};
+type GlazeIngredientDraft = {
+  id: string;
+  materialName: string;
+  percentage: string;
+  role: RecipeIngredient["role"];
+};
+type SupplierGlazeCatalogEntry = {
+  id: string;
+  supplier: string;
+  productLine: string;
+  name: string;
+  glazeType: string;
+  surface: string;
+  colorFamily: string[];
+  opacity: string;
+  coneRange: string;
+  firingRange: string;
+  atmosphereCompatibility: AtmosphereType[];
+  heroImageColor: string;
+  description: string;
+  applicationNotes: string;
+};
+type ClayBodyCatalogEntry = {
+  id: string;
+  manufacturer: string;
+  supplier: string;
+  name: string;
+  bodyType: string;
+  rawColor: string;
+  firedColor: string;
+  texture: string;
+  grogPercentage?: number;
+  absorptionPercentage?: number;
+  shrinkagePercentage?: number;
+  coneRange: string;
+  atmosphereSuitability: AtmosphereType[];
+  imageColor: string;
+  notes: string;
+};
+type KilnCatalogEntry = {
+  id: string;
+  manufacturer: string;
+  model: string;
+  name: string;
+  kilnType: FiringType;
+  fuelType: string;
+  controllerType: string;
+  usableVolumeLiters: number;
+  maxTemperatureC: number;
+  recommendedConeRange: string;
+  defaultLocation: KilnLocation;
+  powerKw?: number;
+  notes: string;
+};
 
 type MobileNavItem =
   | { label: "Home" | "Explore" | "Profile"; view: View; icon: LucideIcon }
@@ -187,6 +246,225 @@ const KILN_LOCATION_OPTIONS: Array<{ value: KilnLocation; label: string }> = [
   { value: "outdoors_fully_covered_open_sided", label: "Covered open-sided" },
   { value: "other", label: "Other" },
 ];
+const PROFILE_SWATCHES = [
+  BRAND_COLORS.terracotta,
+  BRAND_COLORS.cobalt,
+  BRAND_COLORS.ashBlue,
+  BRAND_COLORS.sun,
+  BRAND_COLORS.moss,
+  BRAND_COLORS.stone,
+  BRAND_COLORS.iron,
+];
+const GLAZE_SUPPLIER_CATALOG: SupplierGlazeCatalogEntry[] = [
+  {
+    id: "amaco-potters-choice-blue-rutile",
+    supplier: "AMACO",
+    productLine: "Potter's Choice",
+    name: "PC-20 Blue Rutile",
+    glazeType: "commercial",
+    surface: "glossy variegated blue",
+    colorFamily: ["blue", "brown", "cream"],
+    opacity: "variegated",
+    coneRange: "5-6",
+    firingRange: "Cone 5-6",
+    atmosphereCompatibility: ["oxidation"],
+    heroImageColor: BRAND_COLORS.ashBlue,
+    description: "Commercial brush-on glaze profile for tracking bought glaze results.",
+    applicationNotes: "Record coats, layering, clay body, and firing schedule with each result.",
+  },
+  {
+    id: "amaco-celadon-snow",
+    supplier: "AMACO",
+    productLine: "Celadon",
+    name: "C-10 Snow",
+    glazeType: "commercial",
+    surface: "glossy translucent white",
+    colorFamily: ["white", "clear"],
+    opacity: "translucent",
+    coneRange: "5-6",
+    firingRange: "Cone 5-6",
+    atmosphereCompatibility: ["oxidation"],
+    heroImageColor: "#ede8dd",
+    description: "Commercial celadon glaze profile for repeatable test-tile tracking.",
+    applicationNotes: "Note number of brushed coats and whether it is used alone or layered.",
+  },
+  {
+    id: "mayco-stoneware-light-flux",
+    supplier: "Mayco",
+    productLine: "Stoneware",
+    name: "SW-401 Light Flux",
+    glazeType: "commercial",
+    surface: "glossy flowing flux",
+    colorFamily: ["cream", "tan"],
+    opacity: "translucent",
+    coneRange: "5-10",
+    firingRange: "Cone 5-10",
+    atmosphereCompatibility: ["oxidation", "reduction"],
+    heroImageColor: BRAND_COLORS.sun,
+    description: "Commercial flux profile for documenting combinations and movement.",
+    applicationNotes: "Track placement, overlap order, and cleanup clearance near foot rings.",
+  },
+  {
+    id: "mayco-stoneware-galaxy",
+    supplier: "Mayco",
+    productLine: "Stoneware",
+    name: "SW-156 Galaxy",
+    glazeType: "commercial",
+    surface: "glossy speckled dark",
+    colorFamily: ["black", "blue", "white"],
+    opacity: "opaque",
+    coneRange: "5-10",
+    firingRange: "Cone 5-10",
+    atmosphereCompatibility: ["oxidation", "reduction"],
+    heroImageColor: "#1f1b19",
+    description: "Commercial stoneware glaze profile for comparing clay body response.",
+    applicationNotes: "Record coat count and whether the glaze breaks over texture.",
+  },
+  {
+    id: "coyote-iron-saturate",
+    supplier: "Coyote",
+    productLine: "Mid-fire",
+    name: "Iron Saturate",
+    glazeType: "commercial",
+    surface: "glossy iron red",
+    colorFamily: ["red", "brown", "black"],
+    opacity: "opaque",
+    coneRange: "5-6",
+    firingRange: "Cone 5-6",
+    atmosphereCompatibility: ["oxidation"],
+    heroImageColor: BRAND_COLORS.iron,
+    description: "Commercial mid-fire profile for documenting color breaks and layering.",
+    applicationNotes: "Track thickness, clay color, and cooling schedule for each result.",
+  },
+];
+const CLAY_BODY_CATALOG: ClayBodyCatalogEntry[] = [
+  {
+    id: "laguna-b-mix-5",
+    manufacturer: "Laguna",
+    supplier: "Laguna distributor",
+    name: "B-Mix 5",
+    bodyType: "stoneware",
+    rawColor: "light gray",
+    firedColor: "warm white",
+    texture: "smooth",
+    absorptionPercentage: 2,
+    shrinkagePercentage: 12,
+    coneRange: "5-6",
+    atmosphereSuitability: ["oxidation", "reduction"],
+    imageColor: "#ded8cd",
+    notes: "Commercial clay body profile for tracking glaze fit and fired color.",
+  },
+  {
+    id: "laguna-speckled-buff",
+    manufacturer: "Laguna",
+    supplier: "Laguna distributor",
+    name: "Speckled Buff",
+    bodyType: "stoneware",
+    rawColor: "buff gray",
+    firedColor: "buff with iron speckle",
+    texture: "medium speckle",
+    grogPercentage: 3,
+    absorptionPercentage: 2,
+    shrinkagePercentage: 12,
+    coneRange: "5-6",
+    atmosphereSuitability: ["oxidation", "reduction"],
+    imageColor: "#b9855f",
+    notes: "Good candidate for comparing clear, white, and breaking glazes.",
+  },
+  {
+    id: "standard-266",
+    manufacturer: "Standard Ceramic",
+    supplier: "Standard Ceramic distributor",
+    name: "266 Dark Brown",
+    bodyType: "stoneware",
+    rawColor: "dark brown",
+    firedColor: "deep brown",
+    texture: "smooth",
+    absorptionPercentage: 1.5,
+    shrinkagePercentage: 12,
+    coneRange: "4-6",
+    atmosphereSuitability: ["oxidation"],
+    imageColor: "#4b3028",
+    notes: "Commercial clay body profile for testing opacity and liner glaze fit.",
+  },
+  {
+    id: "aardvark-coleman-porcelain",
+    manufacturer: "Aardvark",
+    supplier: "Aardvark distributor",
+    name: "Coleman Porcelain",
+    bodyType: "porcelain",
+    rawColor: "white",
+    firedColor: "bright white",
+    texture: "smooth",
+    absorptionPercentage: 0.8,
+    shrinkagePercentage: 14,
+    coneRange: "5-10",
+    atmosphereSuitability: ["oxidation", "reduction"],
+    imageColor: "#f2eee6",
+    notes: "Porcelain profile for celadon, ash, and translucent glaze testing.",
+  },
+];
+const KILN_CATALOG: KilnCatalogEntry[] = [
+  {
+    id: "skutt-km-1027",
+    manufacturer: "Skutt",
+    model: "KM-1027",
+    name: "Skutt KM-1027",
+    kilnType: "electric",
+    fuelType: "electric",
+    controllerType: "digital controller",
+    usableVolumeLiters: 198,
+    maxTemperatureC: 1315,
+    recommendedConeRange: "06-10",
+    defaultLocation: "indoors",
+    powerKw: 10.2,
+    notes: "Electric kiln preset. Add your actual voltage, element age, and venting notes.",
+  },
+  {
+    id: "skutt-km-1227",
+    manufacturer: "Skutt",
+    model: "KM-1227",
+    name: "Skutt KM-1227",
+    kilnType: "electric",
+    fuelType: "electric",
+    controllerType: "digital controller",
+    usableVolumeLiters: 262,
+    maxTemperatureC: 1315,
+    recommendedConeRange: "06-10",
+    defaultLocation: "indoors",
+    powerKw: 11.5,
+    notes: "Large electric kiln preset for cone 6 and cone 10 firing logs.",
+  },
+  {
+    id: "ll-easy-fire-e23t",
+    manufacturer: "L&L",
+    model: "Easy-Fire e23T",
+    name: "L&L Easy-Fire e23T",
+    kilnType: "electric",
+    fuelType: "electric",
+    controllerType: "digital controller",
+    usableVolumeLiters: 187,
+    maxTemperatureC: 1315,
+    recommendedConeRange: "06-10",
+    defaultLocation: "indoors",
+    powerKw: 9.6,
+    notes: "Electric kiln preset. Record actual controller, vent, and thermocouple setup.",
+  },
+  {
+    id: "bailey-gas-shuttle",
+    manufacturer: "Bailey",
+    model: "Gas shuttle",
+    name: "Bailey Gas Shuttle",
+    kilnType: "gas",
+    fuelType: "natural gas",
+    controllerType: "manual pyrometer",
+    usableVolumeLiters: 510,
+    maxTemperatureC: 1320,
+    recommendedConeRange: "6-11",
+    defaultLocation: "semi_enclosed",
+    notes: "Gas kiln preset for reduction tracking, damper notes, and pressure readings.",
+  },
+];
 
 function formatOptionLabel<T extends string>(options: Array<{ value: T; label: string }>, value: T) {
   return options.find((option) => option.value === value)?.label ?? value.replaceAll("_", " ");
@@ -203,6 +481,25 @@ function decimalInputValue(value: number | undefined) {
 function parseOptionalNumber(value: string) {
   const parsed = Number(value);
   return value.trim() === "" || Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function parseRequiredNumber(value: string, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function colorFamiliesFromText(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function atmosphereValuesFromForm(form: HTMLFormElement) {
+  const values = new FormData(form).getAll("atmosphere");
+  return values.filter((value): value is AtmosphereType =>
+    ATMOSPHERE_OPTIONS.some((option) => option.value === value),
+  );
 }
 
 function windDirectionFromDegrees(value: number | undefined) {
@@ -260,6 +557,25 @@ function isMobileAppViewport() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
 }
 
+function initialAuthStatus(): AuthStatus {
+  return isSupabaseBrowserConfigured()
+    ? {
+        state: "loading",
+        message: "Checking Supabase session.",
+      }
+    : {
+        state: "unconfigured",
+        message:
+          "Supabase browser client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      };
+}
+
+function initialFeedTab(): "Following" | "Popular" {
+  if (typeof window === "undefined") return "Following";
+  const saved = window.localStorage.getItem("flux-and-fire.feed-tab");
+  return saved === "Following" || saved === "Popular" ? saved : "Following";
+}
+
 export function KilnbookWorkspace({
   snapshot,
 }: {
@@ -267,13 +583,13 @@ export function KilnbookWorkspace({
 }) {
   const [view, setView] = useState<View>("Home");
   const [viewer, setViewer] = useState<Profile>(snapshot.viewer);
-  const [authStatus, setAuthStatus] = useState<AuthStatus>({
-    state: "loading",
-    message: "Checking Supabase session.",
-  });
-  const [feedTab, setFeedTab] = useState<"Following" | "Popular">("Following");
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(initialAuthStatus);
+  const [feedTab, setFeedTab] = useState<"Following" | "Popular">(initialFeedTab);
   const [firings, setFirings] = useState<FiringRecord[]>(snapshot.firings);
   const [glazes, setGlazes] = useState<GlazeProfile[]>(snapshot.glazes);
+  const [glazeRecipeVersions, setGlazeRecipeVersions] = useState<GlazeRecipeVersion[]>(
+    snapshot.glazeRecipeVersions,
+  );
   const [clayBodies, setClayBodies] = useState<ClayBodyProfile[]>(snapshot.clayBodies);
   const [kilns, setKilns] = useState<KilnProfile[]>(snapshot.kilns);
   const [environmentRecords, setEnvironmentRecords] = useState<FiringEnvironmentRecord[]>(
@@ -299,11 +615,6 @@ export function KilnbookWorkspace({
     let active = true;
 
     if (!isSupabaseBrowserConfigured()) {
-      setAuthStatus({
-        state: "unconfigured",
-        message:
-          "Supabase browser client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
-      });
       return () => {
         active = false;
       };
@@ -366,13 +677,6 @@ export function KilnbookWorkspace({
   }, [snapshot.profiles, snapshot.viewer]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("flux-and-fire.feed-tab");
-    if (saved === "Following" || saved === "Popular") {
-      setFeedTab(saved);
-    }
-  }, []);
-
-  useEffect(() => {
     window.localStorage.setItem("flux-and-fire.feed-tab", feedTab);
   }, [feedTab]);
 
@@ -386,14 +690,14 @@ export function KilnbookWorkspace({
   );
   const activeFiring = useMemo(
     () => (activeAddFlow?.firingId ? firingById.get(activeAddFlow.firingId) : undefined),
-    [activeAddFlow?.firingId, firingById],
+    [activeAddFlow, firingById],
   );
   const activeEnvironment = useMemo(
     () =>
       activeAddFlow?.firingId
         ? environmentByFiringId.get(activeAddFlow.firingId)
         : undefined,
-    [activeAddFlow?.firingId, environmentByFiringId],
+    [activeAddFlow, environmentByFiringId],
   );
 
   const ratePoints = useMemo(
@@ -604,10 +908,11 @@ export function KilnbookWorkspace({
 
   const createInlineGlazeProfile = () => {
     const createdAt = Date.now();
+    const recipeId = `recipe-inline-${createdAt}`;
     const profile: GlazeProfile = {
       id: `glaze-inline-${createdAt}`,
       ownerId: viewer.id,
-      name: `Untitled glaze ${glazes.length + 1}`,
+      name: `Draft glaze profile ${glazes.length + 1}`,
       creatorAttribution: viewer.displayName,
       source: "Created from post composer",
       glazeType: "studio_test",
@@ -622,9 +927,22 @@ export function KilnbookWorkspace({
       description: "Draft glaze profile. Add recipe details, surface notes, and fired images.",
       applicationNotes: "Application notes pending.",
       heroImageColor: BRAND_COLORS.sun,
-      currentRecipeVersionId: `recipe-inline-${createdAt}`,
+      currentRecipeVersionId: recipeId,
+    };
+    const recipeVersion: GlazeRecipeVersion = {
+      id: recipeId,
+      glazeId: profile.id,
+      versionNumber: 1,
+      effectiveDate: new Date(createdAt).toISOString().slice(0, 10),
+      batchSizeGrams: 1000,
+      totalDryWeightGrams: 1000,
+      ingredients: [],
+      sourceAttribution: viewer.displayName,
+      changeSummary: "Quick profile created from the post composer. Add recipe details in the glaze library.",
+      visibility: "public",
     };
     setGlazes((items) => [profile, ...items]);
+    setGlazeRecipeVersions((items) => [recipeVersion, ...items]);
     return profile;
   };
 
@@ -633,7 +951,7 @@ export function KilnbookWorkspace({
     const profile: ClayBodyProfile = {
       id: `clay-inline-${createdAt}`,
       ownerId: viewer.id,
-      name: `Untitled clay body ${clayBodies.length + 1}`,
+      name: `Draft clay body profile ${clayBodies.length + 1}`,
       manufacturer: "Studio mixed",
       supplier: "Studio",
       bodyType: "stoneware",
@@ -658,7 +976,7 @@ export function KilnbookWorkspace({
     const profile: KilnProfile = {
       id: `kiln-inline-${createdAt}`,
       ownerId: viewer.id,
-      name: `Untitled kiln ${kilns.length + 1}`,
+      name: `Draft kiln profile ${kilns.length + 1}`,
       manufacturer: "Unknown",
       model: "Draft",
       kilnType: "electric",
@@ -793,6 +1111,59 @@ export function KilnbookWorkspace({
   };
 
   const handleSaveGlazeRecipe = (payload: GlazeRecipePayload) => {
+    const createdAt = Date.now();
+    const profileId = `glaze-add-flow-${createdAt}`;
+    const recipeId = `recipe-add-flow-${createdAt}`;
+    const ingredients: RecipeIngredient[] = [
+      {
+        materialId: `material-${createdAt}-base`,
+        materialName: payload.baseMaterial,
+        percentage: 80,
+        weightGrams: 800,
+        role: "base",
+      },
+      {
+        materialId: `material-${createdAt}-accent`,
+        materialName: payload.accentMaterial,
+        percentage: 20,
+        weightGrams: 200,
+        role: "colorant",
+      },
+    ];
+    const profile: GlazeProfile = {
+      id: profileId,
+      ownerId: viewer.id,
+      name: payload.title,
+      creatorAttribution: viewer.displayName,
+      source: "Studio recipe",
+      glazeType: "studio_recipe",
+      surface: "Surface pending",
+      colorFamily: ["Unsorted"],
+      opacity: "unknown",
+      firingRange: payload.coneRange,
+      coneRange: payload.coneRange,
+      atmosphereCompatibility: ["oxidation", "reduction"],
+      recipeVisibility: payload.visibility,
+      profileVisibility: payload.visibility,
+      description: "New glaze recipe profile. Add fired images, surface notes, and application details as results come in.",
+      applicationNotes: "Application notes pending.",
+      heroImageColor: BRAND_COLORS.sun,
+      currentRecipeVersionId: recipeId,
+    };
+    const recipeVersion: GlazeRecipeVersion = {
+      id: recipeId,
+      glazeId: profileId,
+      versionNumber: 1,
+      effectiveDate: new Date(createdAt).toISOString().slice(0, 10),
+      batchSizeGrams: 1000,
+      totalDryWeightGrams: 1000,
+      ingredients,
+      sourceAttribution: viewer.displayName,
+      changeSummary: "Initial recipe saved from the Add flow.",
+      visibility: payload.visibility,
+    };
+    setGlazes((items) => [profile, ...items]);
+    setGlazeRecipeVersions((items) => [recipeVersion, ...items]);
     recordAddDraft(
       "glaze_recipe",
       payload.visibility,
@@ -800,6 +1171,27 @@ export function KilnbookWorkspace({
       `${payload.coneRange} recipe with ${payload.baseMaterial} and ${payload.accentMaterial}.`,
     );
     completeAddFlow("Glazes");
+  };
+
+  const handleCreateGlazeRecord = (record: CreatedGlazeRecord) => {
+    setGlazes((items) => [record.profile, ...items]);
+    setGlazeRecipeVersions((items) => [record.recipeVersion, ...items]);
+    recordAddDraft(
+      "glaze_recipe",
+      record.profile.recipeVisibility === "studio" ? "followers" : record.profile.recipeVisibility,
+      record.profile.name,
+      record.recipeVersion.ingredients.length > 0
+        ? `${record.recipeVersion.ingredients.length} ingredients saved as version ${record.recipeVersion.versionNumber}.`
+        : `${record.profile.source} profile added for result tracking.`,
+    );
+  };
+
+  const handleCreateClayBodyProfile = (profile: ClayBodyProfile) => {
+    setClayBodies((items) => [profile, ...items]);
+  };
+
+  const handleCreateKilnProfile = (profile: KilnProfile) => {
+    setKilns((items) => [profile, ...items]);
   };
 
   const handleSavePreviousFiring = (payload: PreviousFiringPayload) => {
@@ -969,26 +1361,35 @@ export function KilnbookWorkspace({
           )}
           {!activeAddFlow && view === "Glazes" && (
             <GlazesScreen
+              viewer={viewer}
               glazes={glazes}
-              recipes={snapshot.glazeRecipeVersions}
+              recipes={glazeRecipeVersions}
               applications={snapshot.glazeApplications}
               clayBodies={clayBodies}
               firings={firings}
               addDrafts={addDrafts.filter((draft) =>
                 draft.kind === "glaze_recipe" || draft.kind === "glaze_result",
               )}
+              onCreateGlazeRecord={handleCreateGlazeRecord}
             />
           )}
           {!activeAddFlow && view === "Clay Bodies" && (
             <ClayBodiesScreen
+              viewer={viewer}
               clayBodies={clayBodies}
               glazes={glazes}
               applications={snapshot.glazeApplications}
               firings={firings}
+              onCreateClayBodyProfile={handleCreateClayBodyProfile}
             />
           )}
           {!activeAddFlow && view === "Kilns" && (
-            <KilnsScreen kilns={kilns} firings={firings} />
+            <KilnsScreen
+              viewer={viewer}
+              kilns={kilns}
+              firings={firings}
+              onCreateKilnProfile={handleCreateKilnProfile}
+            />
           )}
           {!activeAddFlow && view === "Explore" && (
             <ExploreScreen
@@ -1545,7 +1946,7 @@ function GlazeRecipeAddFlow({
   onBack: () => void;
   onSave: (payload: GlazeRecipePayload) => void;
 }) {
-  const [title, setTitle] = useState("Untitled glaze recipe");
+  const [title, setTitle] = useState("New glaze recipe");
   const [coneRange, setConeRange] = useState(glazes[0]?.coneRange ?? "Cone 6");
   const [baseMaterial, setBaseMaterial] = useState("Custer Feldspar");
   const [accentMaterial, setAccentMaterial] = useState("Red iron oxide");
@@ -1610,7 +2011,7 @@ function GlazeRecipeAddFlow({
         </form>
         <aside className="kb-panel kb-flow-sidebar">
           <p className="kb-kicker">Preview</p>
-          <h3>{title || "Untitled glaze recipe"}</h3>
+          <h3>{title || "New glaze recipe"}</h3>
           <div className="kb-hero-swatch" style={{ background: glazes[0]?.heroImageColor ?? BRAND_COLORS.sun }} />
           <div className="kb-chip-row">
             <span className="kb-chip">{coneRange}</span>
@@ -3699,23 +4100,34 @@ function FiringComparison({ firings }: { firings: FiringRecord[] }) {
 }
 
 function GlazesScreen({
+  viewer,
   glazes,
   recipes,
   applications,
   clayBodies,
   firings,
   addDrafts,
+  onCreateGlazeRecord,
 }: {
+  viewer: Profile;
   glazes: GlazeProfile[];
-  recipes: { glazeId: string; versionNumber: number; visibility: Visibility; changeSummary: string; ingredients: { materialName: string; percentage: number; role: string }[] }[];
+  recipes: GlazeRecipeVersion[];
   applications: { glazeId: string; clayBodyId: string | null; firingId: string; resultRating?: number }[];
   clayBodies: ClayBodyProfile[];
   firings: FiringRecord[];
   addDrafts: AddDraft[];
+  onCreateGlazeRecord: (record: CreatedGlazeRecord) => void;
 }) {
-  const glaze = glazes[0];
-  const glazeRecipes = recipes.filter((recipe) => recipe.glazeId === glaze.id);
-  const [draftGlazeCount, setDraftGlazeCount] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedGlazeId, setSelectedGlazeId] = useState(glazes[0]?.id ?? "");
+  const glaze = glazes.find((item) => item.id === selectedGlazeId) ?? glazes[0];
+  const glazeRecipes = glaze ? recipes.filter((recipe) => recipe.glazeId === glaze.id) : [];
+  const createGlaze = (record: CreatedGlazeRecord) => {
+    onCreateGlazeRecord(record);
+    setSelectedGlazeId(record.profile.id);
+    setCreateOpen(false);
+  };
+
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -3727,7 +4139,7 @@ function GlazesScreen({
           <button
             type="button"
             className="kb-primary-button"
-            onClick={() => setDraftGlazeCount((count) => count + 1)}
+            onClick={() => setCreateOpen(true)}
           >
             <Plus size={18} />
             <span>New glaze</span>
@@ -3735,89 +4147,114 @@ function GlazesScreen({
         </div>
         <AddDraftList drafts={addDrafts} />
         <div className="kb-library-grid">
-          {Array.from({ length: draftGlazeCount }, (_, index) => (
-            <LibraryCard
-              key={`draft-glaze-${index}`}
-              title={`Untitled glaze ${index + 1}`}
-              eyebrow="draft"
-              detail="Ready for recipe details"
-              color={BRAND_COLORS.sun}
-            />
-          ))}
           {glazes.map((item) => (
-            <LibraryCard
+            <button
+              type="button"
               key={item.id}
-              title={item.name}
-              eyebrow={item.glazeType}
-              detail={`${item.coneRange} · ${item.surface}`}
-              color={item.heroImageColor}
-            />
+              className={item.id === glaze?.id ? "kb-library-select active" : "kb-library-select"}
+              onClick={() => setSelectedGlazeId(item.id)}
+            >
+              <LibraryCard
+                title={item.name}
+                eyebrow={item.source}
+                detail={`${item.coneRange} · ${item.surface}`}
+                color={item.heroImageColor}
+              />
+            </button>
           ))}
         </div>
       </section>
       <aside className="kb-stack">
-        <section className="kb-panel">
-          <div className="kb-section-title compact">
-            <h3>{glaze.name}</h3>
-            <VisibilityPill visibility={glaze.recipeVisibility} />
-          </div>
-          <div className="kb-hero-swatch" style={{ background: glaze.heroImageColor }} />
-          <p>{glaze.description}</p>
-          <div className="kb-chip-row">
-            {glaze.colorFamily.map((color) => (
-              <span className="kb-chip" key={color}>{color}</span>
-            ))}
-          </div>
-        </section>
-        <section className="kb-panel">
-          <div className="kb-section-title compact">
-            <h3>Recipe editor</h3>
-            <span>Historical versions</span>
-          </div>
-          {glazeRecipes.map((recipe) => (
-            <div className="kb-version-row" key={`${recipe.glazeId}-${recipe.versionNumber}`}>
-              <strong>Version {recipe.versionNumber}</strong>
-              <span>{recipe.changeSummary}</span>
-              <small>{recipe.ingredients.filter((ingredient) => ingredient.role === "base").length} base ingredients · {recipe.visibility}</small>
-            </div>
-          ))}
-        </section>
-        <section className="kb-panel">
-          <div className="kb-section-title compact">
-            <h3>Connected results</h3>
-            <span>Automatic relationships</span>
-          </div>
-          {applications.filter((app) => app.glazeId === glaze.id).map((app) => {
-            const clay = clayBodies.find((item) => item.id === app.clayBodyId);
-            const firing = firings.find((item) => item.id === app.firingId);
-            return (
-              <div className="kb-linked-row" key={`${app.firingId}-${app.clayBodyId}`}>
-                <span>{clay?.name ?? "Unknown clay body"}</span>
-                <strong>{firing?.readableNumber}</strong>
-                <small>{app.resultRating ?? "Unrated"} score</small>
+        {glaze ? (
+          <>
+            <section className="kb-panel">
+              <div className="kb-section-title compact">
+                <h3>{glaze.name}</h3>
+                <VisibilityPill visibility={glaze.recipeVisibility} />
               </div>
-            );
-          })}
-        </section>
+              <div className="kb-hero-swatch" style={{ background: glaze.heroImageColor }} />
+              <p>{glaze.description}</p>
+              <div className="kb-chip-row">
+                {glaze.colorFamily.map((color) => (
+                  <span className="kb-chip" key={color}>{color}</span>
+                ))}
+              </div>
+            </section>
+            <section className="kb-panel">
+              <div className="kb-section-title compact">
+                <h3>Recipe editor</h3>
+                <span>Historical versions</span>
+              </div>
+              {glazeRecipes.map((recipe) => (
+                <div className="kb-version-row" key={`${recipe.glazeId}-${recipe.versionNumber}`}>
+                  <strong>Version {recipe.versionNumber}</strong>
+                  <span>{recipe.changeSummary}</span>
+                  <small>{recipe.ingredients.length} ingredients · {recipe.visibility}</small>
+                </div>
+              ))}
+            </section>
+            <section className="kb-panel">
+              <div className="kb-section-title compact">
+                <h3>Connected results</h3>
+                <span>Automatic relationships</span>
+              </div>
+              {applications.filter((app) => app.glazeId === glaze.id).map((app) => {
+                const clay = clayBodies.find((item) => item.id === app.clayBodyId);
+                const firing = firings.find((item) => item.id === app.firingId);
+                return (
+                  <div className="kb-linked-row" key={`${app.firingId}-${app.clayBodyId}`}>
+                    <span>{clay?.name ?? "Unknown clay body"}</span>
+                    <strong>{firing?.readableNumber}</strong>
+                    <small>{app.resultRating ?? "Unrated"} score</small>
+                  </div>
+                );
+              })}
+            </section>
+          </>
+        ) : (
+          <section className="kb-panel kb-empty-state">
+            <Layers3 size={22} aria-hidden="true" />
+            <h3>No glazes yet</h3>
+            <p>Create a studio recipe or import a commercial glaze profile to start tracking results.</p>
+          </section>
+        )}
       </aside>
+      {createOpen && (
+        <GlazeCreateDialog
+          viewer={viewer}
+          onClose={() => setCreateOpen(false)}
+          onCreate={createGlaze}
+        />
+      )}
     </div>
   );
 }
 
 function ClayBodiesScreen({
+  viewer,
   clayBodies,
   glazes,
   applications,
   firings,
+  onCreateClayBodyProfile,
 }: {
+  viewer: Profile;
   clayBodies: ClayBodyProfile[];
   glazes: GlazeProfile[];
   applications: { glazeId: string; clayBodyId: string | null; firingId: string; resultRating?: number }[];
   firings: FiringRecord[];
+  onCreateClayBodyProfile: (profile: ClayBodyProfile) => void;
 }) {
-  const clay = clayBodies[0];
-  const related = applications.filter((application) => application.clayBodyId === clay.id);
-  const [draftClayCount, setDraftClayCount] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedClayId, setSelectedClayId] = useState(clayBodies[0]?.id ?? "");
+  const clay = clayBodies.find((item) => item.id === selectedClayId) ?? clayBodies[0];
+  const related = clay ? applications.filter((application) => application.clayBodyId === clay.id) : [];
+  const createClay = (profile: ClayBodyProfile) => {
+    onCreateClayBodyProfile(profile);
+    setSelectedClayId(profile.id);
+    setCreateOpen(false);
+  };
+
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -3829,72 +4266,98 @@ function ClayBodiesScreen({
           <button
             type="button"
             className="kb-primary-button"
-            onClick={() => setDraftClayCount((count) => count + 1)}
+            onClick={() => setCreateOpen(true)}
           >
             <Plus size={18} />
             <span>New clay body</span>
           </button>
         </div>
         <div className="kb-library-grid">
-          {Array.from({ length: draftClayCount }, (_, index) => (
-            <LibraryCard
-              key={`draft-clay-${index}`}
-              title={`Untitled clay body ${index + 1}`}
-              eyebrow="draft"
-              detail="Ready for clay properties"
-              color={BRAND_COLORS.stone}
-            />
-          ))}
           {clayBodies.map((item) => (
-            <LibraryCard
+            <button
+              type="button"
               key={item.id}
-              title={item.name}
-              eyebrow={item.bodyType}
-              detail={`${item.coneRange} · ${item.firedColor}`}
-              color={item.imageColor}
-            />
+              className={item.id === clay?.id ? "kb-library-select active" : "kb-library-select"}
+              onClick={() => setSelectedClayId(item.id)}
+            >
+              <LibraryCard
+                title={item.name}
+                eyebrow={`${item.manufacturer} · ${item.bodyType}`}
+                detail={`${item.coneRange} · ${item.firedColor}`}
+                color={item.imageColor}
+              />
+            </button>
           ))}
         </div>
       </section>
       <aside className="kb-panel">
-        <div className="kb-section-title compact">
-          <h3>{clay.name}</h3>
-          <VisibilityPill visibility={clay.profileVisibility} />
-        </div>
-        <div className="kb-clay-profile">
-          <div className="kb-hero-swatch" style={{ background: clay.imageColor }} />
-          <div className="kb-spec-list">
-            <span>Texture <strong>{clay.texture}</strong></span>
-            <span>Shrinkage <strong>{clay.shrinkagePercentage}%</strong></span>
-            <span>Absorption <strong>{clay.absorptionPercentage}%</strong></span>
-            <span>Cone <strong>{clay.coneRange}</strong></span>
-          </div>
-        </div>
-        <h4>Glaze performance</h4>
-        {related.map((application) => {
-          const glaze = glazes.find((item) => item.id === application.glazeId);
-          const firing = firings.find((item) => item.id === application.firingId);
-          return (
-            <div className="kb-linked-row" key={`${application.glazeId}-${application.firingId}`}>
-              <span>{glaze?.name}</span>
-              <strong>{application.resultRating ?? "Unrated"}</strong>
-              <small>{firing?.readableNumber}</small>
+        {clay ? (
+          <>
+            <div className="kb-section-title compact">
+              <h3>{clay.name}</h3>
+              <VisibilityPill visibility={clay.profileVisibility} />
             </div>
-          );
-        })}
+            <div className="kb-clay-profile">
+              <div className="kb-hero-swatch" style={{ background: clay.imageColor }} />
+              <div className="kb-spec-list">
+                <span>Texture <strong>{clay.texture}</strong></span>
+                <span>Shrinkage <strong>{clay.shrinkagePercentage ?? "n/a"}%</strong></span>
+                <span>Absorption <strong>{clay.absorptionPercentage ?? "n/a"}%</strong></span>
+                <span>Cone <strong>{clay.coneRange}</strong></span>
+              </div>
+            </div>
+            <h4>Glaze performance</h4>
+            {related.map((application) => {
+              const glaze = glazes.find((item) => item.id === application.glazeId);
+              const firing = firings.find((item) => item.id === application.firingId);
+              return (
+                <div className="kb-linked-row" key={`${application.glazeId}-${application.firingId}`}>
+                  <span>{glaze?.name}</span>
+                  <strong>{application.resultRating ?? "Unrated"}</strong>
+                  <small>{firing?.readableNumber}</small>
+                </div>
+              );
+            })}
+          </>
+        ) : (
+          <div className="kb-empty-state">
+            <Microscope size={22} aria-hidden="true" />
+            <h3>No clay bodies yet</h3>
+            <p>Add a studio body or import a common commercial body before recording glaze fit.</p>
+          </div>
+        )}
       </aside>
+      {createOpen && (
+        <ClayBodyCreateDialog
+          viewer={viewer}
+          onClose={() => setCreateOpen(false)}
+          onCreate={createClay}
+        />
+      )}
     </div>
   );
 }
 
 function KilnsScreen({
+  viewer,
   kilns,
   firings,
+  onCreateKilnProfile,
 }: {
+  viewer: Profile;
   kilns: KilnProfile[];
   firings: FiringRecord[];
+  onCreateKilnProfile: (profile: KilnProfile) => void;
 }) {
-  const [draftKilnCount, setDraftKilnCount] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedKilnId, setSelectedKilnId] = useState(kilns[0]?.id ?? "");
+  const selectedKiln = kilns.find((kiln) => kiln.id === selectedKilnId) ?? kilns[0];
+  const createKiln = (profile: KilnProfile) => {
+    onCreateKilnProfile(profile);
+    setSelectedKilnId(profile.id);
+    setCreateOpen(false);
+  };
+
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -3906,35 +4369,32 @@ function KilnsScreen({
           <button
             type="button"
             className="kb-primary-button"
-            onClick={() => setDraftKilnCount((count) => count + 1)}
+            onClick={() => setCreateOpen(true)}
           >
             <Plus size={18} />
             <span>New kiln</span>
           </button>
         </div>
         <div className="kb-library-grid">
-          {Array.from({ length: draftKilnCount }, (_, index) => (
-            <LibraryCard
-              key={`draft-kiln-${index}`}
-              title={`Untitled kiln ${index + 1}`}
-              eyebrow="draft"
-              detail="Ready for specs"
-              color={BRAND_COLORS.moss}
-            />
-          ))}
           {kilns.map((kiln) => (
-            <LibraryCard
+            <button
+              type="button"
               key={kiln.id}
-              title={kiln.name}
-              eyebrow={kiln.kilnType}
-              detail={`${kiln.usableVolumeLiters} L · ${kiln.recommendedConeRange}`}
-              color={kiln.kilnType === "electric" ? BRAND_COLORS.cobalt : BRAND_COLORS.iron}
-            />
+              className={kiln.id === selectedKiln?.id ? "kb-library-select active" : "kb-library-select"}
+              onClick={() => setSelectedKilnId(kiln.id)}
+            >
+              <LibraryCard
+                title={kiln.name}
+                eyebrow={`${kiln.manufacturer} ${kiln.model}`}
+                detail={`${kiln.usableVolumeLiters} L · ${kiln.recommendedConeRange}`}
+                color={kiln.kilnType === "electric" ? BRAND_COLORS.cobalt : BRAND_COLORS.iron}
+              />
+            </button>
           ))}
         </div>
       </section>
       <aside className="kb-stack">
-        {kilns.slice(0, 2).map((kiln) => (
+        {selectedKiln ? [selectedKiln, ...kilns.filter((kiln) => kiln.id !== selectedKiln.id).slice(0, 1)].map((kiln) => (
           <section className="kb-panel" key={kiln.id}>
             <div className="kb-section-title compact">
               <h3>{kiln.name}</h3>
@@ -3951,8 +4411,822 @@ function KilnsScreen({
               <span>Thermocouple calibration recorded after latest cone check</span>
             </div>
           </section>
-        ))}
+        )) : (
+          <section className="kb-panel kb-empty-state">
+            <Gauge size={22} aria-hidden="true" />
+            <h3>No kilns yet</h3>
+            <p>Add a kiln profile before starting live firing tracking or previous firing records.</p>
+          </section>
+        )}
       </aside>
+      {createOpen && (
+        <KilnCreateDialog
+          viewer={viewer}
+          onClose={() => setCreateOpen(false)}
+          onCreate={createKiln}
+        />
+      )}
+    </div>
+  );
+}
+
+function GlazeCreateDialog({
+  viewer,
+  onClose,
+  onCreate,
+}: {
+  viewer: Profile;
+  onClose: () => void;
+  onCreate: (record: CreatedGlazeRecord) => void;
+}) {
+  const firstCatalog = GLAZE_SUPPLIER_CATALOG[0];
+  const [mode, setMode] = useState<"recipe" | "commercial">("recipe");
+  const [catalogId, setCatalogId] = useState(firstCatalog.id);
+  const [name, setName] = useState("");
+  const [supplier, setSupplier] = useState("Studio");
+  const [productLine, setProductLine] = useState("Studio archive");
+  const [glazeType, setGlazeType] = useState("studio_recipe");
+  const [surface, setSurface] = useState("glossy");
+  const [colorText, setColorText] = useState("cream, brown");
+  const [opacity, setOpacity] = useState("unknown");
+  const [coneRange, setConeRange] = useState("5-6");
+  const [firingRange, setFiringRange] = useState("Cone 5-6");
+  const [description, setDescription] = useState("");
+  const [applicationNotes, setApplicationNotes] = useState("");
+  const [heroImageColor, setHeroImageColor] = useState(BRAND_COLORS.sun);
+  const [recipeVisibility, setRecipeVisibility] = useState<AddVisibility>("public");
+  const [profileVisibility, setProfileVisibility] = useState<AddVisibility>("public");
+  const [ingredients, setIngredients] = useState<GlazeIngredientDraft[]>([
+    { id: "ingredient-feldspar", materialName: "Custer Feldspar", percentage: "40", role: "base" },
+    { id: "ingredient-silica", materialName: "Silica 325 mesh", percentage: "25", role: "base" },
+    { id: "ingredient-kaolin", materialName: "EPK Kaolin", percentage: "20", role: "base" },
+    { id: "ingredient-colorant", materialName: "Red iron oxide", percentage: "5", role: "colorant" },
+  ]);
+  const parsedIngredients = ingredients
+    .map((ingredient) => ({
+      ...ingredient,
+      materialName: ingredient.materialName.trim(),
+      percentageValue: parseRequiredNumber(ingredient.percentage, NaN),
+    }))
+    .filter((ingredient) => ingredient.materialName && Number.isFinite(ingredient.percentageValue));
+  const totalPercentage = parsedIngredients.reduce((sum, ingredient) => sum + ingredient.percentageValue, 0);
+  const canSave = name.trim().length >= 2 && (mode === "commercial" || parsedIngredients.length > 0);
+
+  const applyCatalogEntry = (entryId: string) => {
+    const entry = GLAZE_SUPPLIER_CATALOG.find((item) => item.id === entryId) ?? firstCatalog;
+    setCatalogId(entry.id);
+    setName(entry.name);
+    setSupplier(entry.supplier);
+    setProductLine(entry.productLine);
+    setGlazeType(entry.glazeType);
+    setSurface(entry.surface);
+    setColorText(entry.colorFamily.join(", "));
+    setOpacity(entry.opacity);
+    setConeRange(entry.coneRange);
+    setFiringRange(entry.firingRange);
+    setDescription(entry.description);
+    setApplicationNotes(entry.applicationNotes);
+    setHeroImageColor(entry.heroImageColor);
+  };
+
+  const updateIngredient = (id: string, patch: Partial<GlazeIngredientDraft>) => {
+    setIngredients((items) => items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  const addIngredient = () => {
+    setIngredients((items) => [
+      ...items,
+      {
+        id: `ingredient-${Date.now()}`,
+        materialName: "",
+        percentage: "",
+        role: "base",
+      },
+    ]);
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+
+    const createdAt = Date.now();
+    const profileId = `glaze-${createdAt}`;
+    const recipeId = `recipe-${createdAt}`;
+    const atmospheres = atmosphereValuesFromForm(event.currentTarget);
+    const recipeIngredients: RecipeIngredient[] =
+      mode === "recipe"
+        ? parsedIngredients.map((ingredient, index) => ({
+            materialId: `material-${createdAt}-${index + 1}`,
+            materialName: ingredient.materialName,
+            percentage: ingredient.percentageValue,
+            weightGrams: Math.round(ingredient.percentageValue * 10),
+            role: ingredient.role,
+          }))
+        : [];
+    const colorFamily = colorFamiliesFromText(colorText);
+    const source = mode === "commercial" ? `${supplier} ${productLine}`.trim() : "Studio recipe";
+    const profile: GlazeProfile = {
+      id: profileId,
+      ownerId: viewer.id,
+      name: name.trim(),
+      creatorAttribution: viewer.displayName,
+      source,
+      glazeType: glazeType.trim() || (mode === "commercial" ? "commercial" : "studio_recipe"),
+      surface: surface.trim() || "surface pending",
+      colorFamily: colorFamily.length > 0 ? colorFamily : ["Unsorted"],
+      opacity: opacity.trim() || "unknown",
+      firingRange: firingRange.trim() || coneRange.trim(),
+      coneRange: coneRange.trim() || "pending",
+      atmosphereCompatibility: atmospheres.length > 0 ? atmospheres : ["oxidation"],
+      recipeVisibility,
+      profileVisibility,
+      description:
+        description.trim() ||
+        (mode === "commercial"
+          ? "Commercial glaze profile for tracking bought glaze results."
+          : "Studio glaze recipe profile."),
+      applicationNotes: applicationNotes.trim() || "Record application thickness, coat count, and firing results.",
+      heroImageColor,
+      currentRecipeVersionId: recipeId,
+    };
+    const recipeVersion: GlazeRecipeVersion = {
+      id: recipeId,
+      glazeId: profileId,
+      versionNumber: 1,
+      effectiveDate: new Date(createdAt).toISOString().slice(0, 10),
+      batchSizeGrams: 1000,
+      totalDryWeightGrams: 1000,
+      ingredients: recipeIngredients,
+      sourceAttribution: source,
+      changeSummary:
+        mode === "commercial"
+          ? "Imported commercial glaze profile. Manufacturer formula is not stored."
+          : `Initial studio recipe. Dry total ${Math.round(totalPercentage * 10) / 10}%.`,
+      visibility: recipeVisibility,
+    };
+    onCreate({ profile, recipeVersion });
+  };
+
+  return (
+    <div className="kb-modal-backdrop" role="presentation">
+      <section className="kb-create-dialog" role="dialog" aria-modal="true" aria-labelledby="new-glaze-title">
+        <form className="kb-form" onSubmit={submit}>
+          <div className="kb-section-title compact">
+            <div>
+              <p className="kb-kicker">Glaze profile</p>
+              <h2 id="new-glaze-title">Add a glaze</h2>
+            </div>
+            <button type="button" className="kb-icon-button" aria-label="Close glaze form" onClick={onClose}>
+              <CircleX size={18} />
+            </button>
+          </div>
+          <div className="kb-dialog-toolbar">
+            <div className="kb-segmented">
+              <button
+                type="button"
+                className={mode === "recipe" ? "active" : ""}
+                onClick={() => setMode("recipe")}
+              >
+                Recipe
+              </button>
+              <button
+                type="button"
+                className={mode === "commercial" ? "active" : ""}
+                onClick={() => {
+                  setMode("commercial");
+                  applyCatalogEntry(catalogId);
+                }}
+              >
+                Commercial glaze
+              </button>
+            </div>
+            <VisibilityPill visibility={recipeVisibility} />
+          </div>
+          {mode === "commercial" && (
+            <label>
+              <span>Supplier catalog starter</span>
+              <span className="kb-select-wrap">
+                <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
+                  {GLAZE_SUPPLIER_CATALOG.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.supplier} · {entry.productLine} · {entry.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          )}
+          <div className="kb-form-grid">
+            <label>
+              <span>Glaze name</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name this glaze" />
+            </label>
+            <label>
+              <span>{mode === "commercial" ? "Supplier" : "Source"}</span>
+              <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="Studio, AMACO, Mayco" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Line or family</span>
+              <input value={productLine} onChange={(event) => setProductLine(event.target.value)} placeholder="Potter's Choice, studio archive" />
+            </label>
+            <label>
+              <span>Cone range</span>
+              <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} placeholder="5-6" />
+            </label>
+            <label>
+              <span>Surface</span>
+              <input value={surface} onChange={(event) => setSurface(event.target.value)} placeholder="satin blue, glossy iron" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Type</span>
+              <input value={glazeType} onChange={(event) => setGlazeType(event.target.value)} placeholder="ash, celadon, commercial" />
+            </label>
+            <label>
+              <span>Color family</span>
+              <input value={colorText} onChange={(event) => setColorText(event.target.value)} placeholder="blue, cream, brown" />
+            </label>
+            <label>
+              <span>Opacity</span>
+              <input value={opacity} onChange={(event) => setOpacity(event.target.value)} placeholder="opaque, translucent" />
+            </label>
+          </div>
+          <label>
+            <span>Atmosphere compatibility</span>
+            <div className="kb-checkbox-grid">
+              {ATMOSPHERE_OPTIONS.slice(0, 6).map((option) => (
+                <label className="kb-checkbox-row" key={option.value}>
+                  <input
+                    type="checkbox"
+                    name="atmosphere"
+                    value={option.value}
+                    defaultChecked={option.value === "oxidation" || option.value === "reduction"}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </label>
+          {mode === "recipe" ? (
+            <div className="kb-recipe-builder">
+              <div className="kb-module-head">
+                <div>
+                  <p className="kb-kicker">Recipe</p>
+                  <strong>Initial ingredient version</strong>
+                </div>
+                <span>{Math.round(totalPercentage * 10) / 10}% dry total</span>
+              </div>
+              {ingredients.map((ingredient) => (
+                <div className="kb-ingredient-row" key={ingredient.id}>
+                  <input
+                    aria-label="Material name"
+                    value={ingredient.materialName}
+                    onChange={(event) => updateIngredient(ingredient.id, { materialName: event.target.value })}
+                    placeholder="Material"
+                  />
+                  <input
+                    aria-label="Percentage"
+                    type="number"
+                    inputMode="decimal"
+                    value={ingredient.percentage}
+                    onChange={(event) => updateIngredient(ingredient.id, { percentage: event.target.value })}
+                    placeholder="%"
+                  />
+                  <span className="kb-select-wrap">
+                    <select
+                      aria-label="Ingredient role"
+                      value={ingredient.role}
+                      onChange={(event) =>
+                        updateIngredient(ingredient.id, { role: event.target.value as RecipeIngredient["role"] })
+                      }
+                    >
+                      <option value="base">Base</option>
+                      <option value="colorant">Colorant</option>
+                      <option value="additive">Additive</option>
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
+                  <button
+                    type="button"
+                    className="kb-icon-button mini"
+                    aria-label="Remove ingredient"
+                    onClick={() => setIngredients((items) => items.filter((item) => item.id !== ingredient.id))}
+                    disabled={ingredients.length === 1}
+                  >
+                    <CircleX size={15} />
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="kb-quiet-button" onClick={addIngredient}>
+                <Plus size={16} />
+                <span>Add ingredient</span>
+              </button>
+            </div>
+          ) : (
+            <div className="kb-catalog-panel">
+              <div className="kb-hero-swatch" style={{ background: heroImageColor }} />
+              <div>
+                <p className="kb-kicker">Imported profile</p>
+                <strong>{supplier} {productLine}</strong>
+                <span>Commercial formulas are tracked as product profiles. Results can still connect to firings, clay bodies, layers, photos, and notes.</span>
+              </div>
+            </div>
+          )}
+          <div className="kb-form-grid">
+            <label>
+              <span>Description</span>
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What should future you know about this glaze?" />
+            </label>
+            <label>
+              <span>Application notes</span>
+              <textarea value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} placeholder="Coats, dipping time, specific gravity, layering notes" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Firing range</span>
+              <input value={firingRange} onChange={(event) => setFiringRange(event.target.value)} placeholder="Cone 5-6" />
+            </label>
+            <label>
+              <span>Recipe visibility</span>
+              <span className="kb-select-wrap">
+                <select value={recipeVisibility} onChange={(event) => setRecipeVisibility(event.target.value as AddVisibility)}>
+                  <option value="public">Public</option>
+                  <option value="followers">Followers</option>
+                  <option value="private">Private</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <label>
+              <span>Profile visibility</span>
+              <span className="kb-select-wrap">
+                <select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as AddVisibility)}>
+                  <option value="public">Public</option>
+                  <option value="followers">Followers</option>
+                  <option value="private">Private</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          </div>
+          <div className="kb-swatch-picker" aria-label="Profile swatch color">
+            {PROFILE_SWATCHES.map((color) => (
+              <button
+                type="button"
+                key={color}
+                className={heroImageColor === color ? "active" : ""}
+                style={{ background: color }}
+                aria-label={`Use swatch ${color}`}
+                onClick={() => setHeroImageColor(color)}
+              />
+            ))}
+          </div>
+          <div className="kb-form-actions">
+            <button type="button" className="kb-quiet-button" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="kb-primary-button" disabled={!canSave}>
+              <Save size={17} />
+              <span>{mode === "commercial" ? "Add commercial glaze" : "Save glaze recipe"}</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ClayBodyCreateDialog({
+  viewer,
+  onClose,
+  onCreate,
+}: {
+  viewer: Profile;
+  onClose: () => void;
+  onCreate: (profile: ClayBodyProfile) => void;
+}) {
+  const firstCatalog = CLAY_BODY_CATALOG[0];
+  const [mode, setMode] = useState<"custom" | "commercial">("custom");
+  const [catalogId, setCatalogId] = useState(firstCatalog.id);
+  const [name, setName] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [bodyType, setBodyType] = useState("stoneware");
+  const [rawColor, setRawColor] = useState("gray");
+  const [firedColor, setFiredColor] = useState("buff");
+  const [texture, setTexture] = useState("smooth");
+  const [grogPercentage, setGrogPercentage] = useState("");
+  const [absorptionPercentage, setAbsorptionPercentage] = useState("");
+  const [shrinkagePercentage, setShrinkagePercentage] = useState("");
+  const [coneRange, setConeRange] = useState("5-6");
+  const [notes, setNotes] = useState("");
+  const [imageColor, setImageColor] = useState(BRAND_COLORS.stone);
+  const [profileVisibility, setProfileVisibility] = useState<AddVisibility>("public");
+  const canSave = name.trim().length >= 2;
+
+  const applyCatalogEntry = (entryId: string) => {
+    const entry = CLAY_BODY_CATALOG.find((item) => item.id === entryId) ?? firstCatalog;
+    setCatalogId(entry.id);
+    setName(entry.name);
+    setManufacturer(entry.manufacturer);
+    setSupplier(entry.supplier);
+    setBodyType(entry.bodyType);
+    setRawColor(entry.rawColor);
+    setFiredColor(entry.firedColor);
+    setTexture(entry.texture);
+    setGrogPercentage(entry.grogPercentage === undefined ? "" : String(entry.grogPercentage));
+    setAbsorptionPercentage(entry.absorptionPercentage === undefined ? "" : String(entry.absorptionPercentage));
+    setShrinkagePercentage(entry.shrinkagePercentage === undefined ? "" : String(entry.shrinkagePercentage));
+    setConeRange(entry.coneRange);
+    setNotes(entry.notes);
+    setImageColor(entry.imageColor);
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+    const atmospheres = atmosphereValuesFromForm(event.currentTarget);
+    onCreate({
+      id: `clay-${Date.now()}`,
+      ownerId: viewer.id,
+      name: name.trim(),
+      manufacturer: manufacturer.trim() || (mode === "commercial" ? "Commercial supplier" : "Studio mixed"),
+      supplier: supplier.trim() || "Studio",
+      bodyType: bodyType.trim() || "clay body",
+      rawColor: rawColor.trim() || "unknown",
+      firedColor: firedColor.trim() || "pending",
+      texture: texture.trim() || "unspecified",
+      grogPercentage: parseOptionalNumber(grogPercentage),
+      absorptionPercentage: parseOptionalNumber(absorptionPercentage),
+      shrinkagePercentage: parseOptionalNumber(shrinkagePercentage),
+      coneRange: coneRange.trim() || "pending",
+      atmosphereSuitability: atmospheres.length > 0 ? atmospheres : ["oxidation", "reduction"],
+      recipeVisibility: profileVisibility,
+      profileVisibility,
+      notes: notes.trim() || "Clay body profile for tracking glaze fit, shrinkage, absorption, and fired color.",
+      imageColor,
+    });
+  };
+
+  return (
+    <div className="kb-modal-backdrop" role="presentation">
+      <section className="kb-create-dialog" role="dialog" aria-modal="true" aria-labelledby="new-clay-title">
+        <form className="kb-form" onSubmit={submit}>
+          <div className="kb-section-title compact">
+            <div>
+              <p className="kb-kicker">Clay body profile</p>
+              <h2 id="new-clay-title">Add a clay body</h2>
+            </div>
+            <button type="button" className="kb-icon-button" aria-label="Close clay body form" onClick={onClose}>
+              <CircleX size={18} />
+            </button>
+          </div>
+          <div className="kb-dialog-toolbar">
+            <div className="kb-segmented">
+              <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
+                Custom
+              </button>
+              <button
+                type="button"
+                className={mode === "commercial" ? "active" : ""}
+                onClick={() => {
+                  setMode("commercial");
+                  applyCatalogEntry(catalogId);
+                }}
+              >
+                Commercial body
+              </button>
+            </div>
+            <VisibilityPill visibility={profileVisibility} />
+          </div>
+          {mode === "commercial" && (
+            <label>
+              <span>Clay catalog starter</span>
+              <span className="kb-select-wrap">
+                <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
+                  {CLAY_BODY_CATALOG.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.manufacturer} · {entry.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          )}
+          <div className="kb-form-grid three">
+            <label>
+              <span>Clay body name</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="B-Mix test body" />
+            </label>
+            <label>
+              <span>Manufacturer</span>
+              <input value={manufacturer} onChange={(event) => setManufacturer(event.target.value)} placeholder="Laguna, Standard, studio" />
+            </label>
+            <label>
+              <span>Supplier</span>
+              <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="Local supplier or studio" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Body type</span>
+              <input value={bodyType} onChange={(event) => setBodyType(event.target.value)} placeholder="stoneware, porcelain" />
+            </label>
+            <label>
+              <span>Cone range</span>
+              <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} placeholder="5-6" />
+            </label>
+            <label>
+              <span>Texture</span>
+              <input value={texture} onChange={(event) => setTexture(event.target.value)} placeholder="smooth, grogged, speckled" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Raw color</span>
+              <input value={rawColor} onChange={(event) => setRawColor(event.target.value)} />
+            </label>
+            <label>
+              <span>Fired color</span>
+              <input value={firedColor} onChange={(event) => setFiredColor(event.target.value)} />
+            </label>
+            <label>
+              <span>Grog %</span>
+              <input type="number" inputMode="decimal" value={grogPercentage} onChange={(event) => setGrogPercentage(event.target.value)} />
+            </label>
+          </div>
+          <div className="kb-form-grid">
+            <label>
+              <span>Absorption %</span>
+              <input type="number" inputMode="decimal" value={absorptionPercentage} onChange={(event) => setAbsorptionPercentage(event.target.value)} />
+            </label>
+            <label>
+              <span>Shrinkage %</span>
+              <input type="number" inputMode="decimal" value={shrinkagePercentage} onChange={(event) => setShrinkagePercentage(event.target.value)} />
+            </label>
+          </div>
+          <label>
+            <span>Atmosphere suitability</span>
+            <div className="kb-checkbox-grid">
+              {ATMOSPHERE_OPTIONS.slice(0, 6).map((option) => (
+                <label className="kb-checkbox-row" key={option.value}>
+                  <input
+                    type="checkbox"
+                    name="atmosphere"
+                    value={option.value}
+                    defaultChecked={option.value === "oxidation" || option.value === "reduction"}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </label>
+          <label>
+            <span>Notes</span>
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Fit notes, reclaim blend, drying behavior, supplier batch details" />
+          </label>
+          <div className="kb-form-grid">
+            <label>
+              <span>Profile visibility</span>
+              <span className="kb-select-wrap">
+                <select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as AddVisibility)}>
+                  <option value="public">Public</option>
+                  <option value="followers">Followers</option>
+                  <option value="private">Private</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <div className="kb-swatch-picker" aria-label="Clay swatch color">
+              {PROFILE_SWATCHES.map((color) => (
+                <button
+                  type="button"
+                  key={color}
+                  className={imageColor === color ? "active" : ""}
+                  style={{ background: color }}
+                  aria-label={`Use swatch ${color}`}
+                  onClick={() => setImageColor(color)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="kb-form-actions">
+            <button type="button" className="kb-quiet-button" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="kb-primary-button" disabled={!canSave}>
+              <Save size={17} />
+              <span>Save clay body</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function KilnCreateDialog({
+  viewer,
+  onClose,
+  onCreate,
+}: {
+  viewer: Profile;
+  onClose: () => void;
+  onCreate: (profile: KilnProfile) => void;
+}) {
+  const firstCatalog = KILN_CATALOG[0];
+  const [catalogId, setCatalogId] = useState("");
+  const [name, setName] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [model, setModel] = useState("");
+  const [kilnType, setKilnType] = useState<FiringType>("electric");
+  const [fuelType, setFuelType] = useState("electric");
+  const [controllerType, setControllerType] = useState("digital controller");
+  const [usableVolumeLiters, setUsableVolumeLiters] = useState("");
+  const [maxTemperatureC, setMaxTemperatureC] = useState("1315");
+  const [recommendedConeRange, setRecommendedConeRange] = useState("06-10");
+  const [defaultLocation, setDefaultLocation] = useState<KilnLocation>("indoors");
+  const [powerKw, setPowerKw] = useState("");
+  const [visibility, setVisibility] = useState<AddVisibility>("public");
+  const [active, setActive] = useState(true);
+  const [notes, setNotes] = useState("");
+  const canSave = name.trim().length >= 2;
+
+  const applyCatalogEntry = (entryId: string) => {
+    setCatalogId(entryId);
+    if (!entryId) return;
+    const entry = KILN_CATALOG.find((item) => item.id === entryId) ?? firstCatalog;
+    setCatalogId(entry.id);
+    setName(entry.name);
+    setManufacturer(entry.manufacturer);
+    setModel(entry.model);
+    setKilnType(entry.kilnType);
+    setFuelType(entry.fuelType);
+    setControllerType(entry.controllerType);
+    setUsableVolumeLiters(String(entry.usableVolumeLiters));
+    setMaxTemperatureC(String(entry.maxTemperatureC));
+    setRecommendedConeRange(entry.recommendedConeRange);
+    setDefaultLocation(entry.defaultLocation);
+    setPowerKw(entry.powerKw === undefined ? "" : String(entry.powerKw));
+    setNotes(entry.notes);
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+    onCreate({
+      id: `kiln-${Date.now()}`,
+      ownerId: viewer.id,
+      name: name.trim(),
+      manufacturer: manufacturer.trim() || "Unknown",
+      model: model.trim() || "Custom",
+      kilnType,
+      fuelType: fuelType.trim() || formatOptionLabel(FIRING_TYPE_OPTIONS, kilnType),
+      controllerType: controllerType.trim() || "unspecified",
+      usableVolumeLiters: parseRequiredNumber(usableVolumeLiters, 0),
+      maxTemperatureC: parseRequiredNumber(maxTemperatureC, 1300),
+      recommendedConeRange: recommendedConeRange.trim() || "pending",
+      defaultLocation,
+      powerKw: parseOptionalNumber(powerKw),
+      active,
+      visibility,
+      notes: notes.trim() || "Kiln profile for firing logs, live tracking, maintenance, and environmental conditions.",
+    });
+  };
+
+  return (
+    <div className="kb-modal-backdrop" role="presentation">
+      <section className="kb-create-dialog" role="dialog" aria-modal="true" aria-labelledby="new-kiln-title">
+        <form className="kb-form" onSubmit={submit}>
+          <div className="kb-section-title compact">
+            <div>
+              <p className="kb-kicker">Kiln profile</p>
+              <h2 id="new-kiln-title">Add a kiln</h2>
+            </div>
+            <button type="button" className="kb-icon-button" aria-label="Close kiln form" onClick={onClose}>
+              <CircleX size={18} />
+            </button>
+          </div>
+          <label>
+            <span>Kiln preset</span>
+            <span className="kb-select-wrap">
+              <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
+                <option value="">Custom kiln</option>
+                {KILN_CATALOG.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.manufacturer} · {entry.model}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Kiln name</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="North room 1027" />
+            </label>
+            <label>
+              <span>Manufacturer</span>
+              <input value={manufacturer} onChange={(event) => setManufacturer(event.target.value)} placeholder="Skutt, L&L, Olympic, studio-built" />
+            </label>
+            <label>
+              <span>Model</span>
+              <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="KM-1027, custom downdraft" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Kiln type</span>
+              <span className="kb-select-wrap">
+                <select value={kilnType} onChange={(event) => setKilnType(event.target.value as FiringType)}>
+                  {FIRING_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <label>
+              <span>Fuel</span>
+              <input value={fuelType} onChange={(event) => setFuelType(event.target.value)} placeholder="electric, propane, natural gas, wood" />
+            </label>
+            <label>
+              <span>Controller</span>
+              <input value={controllerType} onChange={(event) => setControllerType(event.target.value)} placeholder="digital, manual, pyrometer" />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Usable volume L</span>
+              <input type="number" inputMode="decimal" value={usableVolumeLiters} onChange={(event) => setUsableVolumeLiters(event.target.value)} />
+            </label>
+            <label>
+              <span>Max temp C</span>
+              <input type="number" inputMode="decimal" value={maxTemperatureC} onChange={(event) => setMaxTemperatureC(event.target.value)} />
+            </label>
+            <label>
+              <span>Cone range</span>
+              <input value={recommendedConeRange} onChange={(event) => setRecommendedConeRange(event.target.value)} />
+            </label>
+          </div>
+          <div className="kb-form-grid three">
+            <label>
+              <span>Default location</span>
+              <span className="kb-select-wrap">
+                <select value={defaultLocation} onChange={(event) => setDefaultLocation(event.target.value as KilnLocation)}>
+                  {KILN_LOCATION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <label>
+              <span>Power kW</span>
+              <input type="number" inputMode="decimal" value={powerKw} onChange={(event) => setPowerKw(event.target.value)} />
+            </label>
+            <label>
+              <span>Visibility</span>
+              <span className="kb-select-wrap">
+                <select value={visibility} onChange={(event) => setVisibility(event.target.value as AddVisibility)}>
+                  <option value="public">Public</option>
+                  <option value="followers">Followers</option>
+                  <option value="private">Private</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          </div>
+          <label>
+            <span>Notes</span>
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Elements, burners, venting, shelves, outdoor cover, calibration, maintenance" />
+          </label>
+          <label className="kb-checkbox-row standalone">
+            <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
+            <span>Active kiln</span>
+          </label>
+          <div className="kb-form-actions">
+            <button type="button" className="kb-quiet-button" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="kb-primary-button" disabled={!canSave}>
+              <Save size={17} />
+              <span>Save kiln</span>
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }

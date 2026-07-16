@@ -475,6 +475,31 @@ button:disabled {
   padding: 1rem;
 }
 
+.kb-create-dialog {
+  width: min(64rem, 100%);
+  max-height: min(92vh, 58rem);
+  overflow: auto;
+  border: 1px solid var(--kb-line);
+  border-radius: var(--kb-radius);
+  background: var(--kb-surface);
+  box-shadow: 0 28px 80px rgba(33, 29, 26, 0.24);
+  padding: 1rem;
+}
+
+.kb-dialog-toolbar,
+.kb-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.kb-form-actions {
+  justify-content: flex-end;
+  margin-top: 0.15rem;
+}
+
 .kb-add-option-grid,
 .kb-add-visibility-grid {
   display: grid;
@@ -1710,6 +1735,12 @@ button:disabled {
   text-align: left;
 }
 
+.kb-library-select.active .kb-library-card {
+  border-color: rgba(163, 67, 36, 0.45);
+  background: rgba(255, 248, 239, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(163, 67, 36, 0.12);
+}
+
 .kb-result-card,
 .kb-library-card,
 .kb-public-card {
@@ -1786,6 +1817,97 @@ button:disabled {
 
 .kb-form-grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kb-recipe-builder,
+.kb-catalog-panel,
+.kb-empty-state {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.64);
+  padding: 0.8rem;
+}
+
+.kb-recipe-builder .kb-module-head > span,
+.kb-catalog-panel span {
+  color: var(--kb-muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.kb-ingredient-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(5.5rem, 0.34fr) minmax(8rem, 0.42fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.kb-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.kb-checkbox-row {
+  min-height: 2.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.68);
+  color: var(--kb-ink);
+  padding: 0 0.65rem;
+}
+
+.kb-checkbox-row.standalone {
+  justify-self: start;
+}
+
+.kb-checkbox-row input {
+  width: auto;
+  accent-color: var(--kb-terracotta);
+}
+
+.kb-checkbox-row span {
+  color: var(--kb-ink);
+  font-size: 0.84rem;
+}
+
+.kb-swatch-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.kb-swatch-picker button {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(33, 29, 26, 0.12), inset 0 -12px 18px rgba(0, 0, 0, 0.14);
+}
+
+.kb-swatch-picker button.active {
+  box-shadow: 0 0 0 2px var(--kb-ink), inset 0 -12px 18px rgba(0, 0, 0, 0.14);
+}
+
+.kb-catalog-panel {
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.kb-empty-state {
+  place-items: start;
+  color: var(--kb-muted);
+}
+
+.kb-empty-state h3,
+.kb-empty-state p {
+  margin: 0;
 }
 
 .kb-comparison-list > div,
@@ -2246,7 +2368,23 @@ button:disabled {
     padding: 0.95rem 0.85rem calc(1rem + env(safe-area-inset-bottom));
   }
 
+  .kb-create-dialog {
+    width: 100%;
+    max-height: 88vh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 12px 12px 0 0;
+    padding: 0.95rem 0.85rem calc(1rem + env(safe-area-inset-bottom));
+  }
+
   .kb-add-dialog .kb-section-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .kb-create-dialog .kb-section-title {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -2386,6 +2524,23 @@ button:disabled {
   .kb-form-grid.three,
   .kb-clay-profile {
     grid-template-columns: 1fr;
+  }
+
+  .kb-ingredient-row,
+  .kb-catalog-panel,
+  .kb-checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-dialog-toolbar,
+  .kb-form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .kb-form-actions .kb-primary-button,
+  .kb-form-actions .kb-quiet-button {
+    width: 100%;
   }
 
   .kb-business-profile {
