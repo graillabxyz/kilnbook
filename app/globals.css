@@ -339,6 +339,7 @@ button:disabled {
 
 .kb-search input {
   width: 100%;
+  min-height: 100%;
   border: 0;
   outline: 0;
   background: transparent;
@@ -374,7 +375,12 @@ button:disabled {
 }
 
 .kb-primary-button span,
-.kb-quiet-button span,
+.kb-quiet-button span {
+  min-width: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
 .kb-chip span {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1130,6 +1136,11 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.kb-composer-footer .kb-primary-button {
+  flex: 0 0 auto;
+  min-width: 6.9rem;
 }
 
 .kb-composer-footer p {

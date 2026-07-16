@@ -252,6 +252,14 @@ const navIcons: Record<PrimaryNavigationItem, typeof BookOpen> = {
   Settings: Settings,
 };
 
+function createRecordMap<T extends { id: string }>(records: T[]) {
+  return new Map(records.map((record) => [record.id, record]));
+}
+
+function isMobileAppViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
+}
+
 export function KilnbookWorkspace({
   snapshot,
 }: {
@@ -275,6 +283,14 @@ export function KilnbookWorkspace({
   const [addChooserOpen, setAddChooserOpen] = useState(false);
   const [addDrafts, setAddDrafts] = useState<AddDraft[]>([]);
   const [activeAddFlow, setActiveAddFlow] = useState<ActiveAddFlow | null>(null);
+  const kilnById = useMemo(() => createRecordMap(snapshot.kilns), [snapshot.kilns]);
+  const glazeById = useMemo(() => createRecordMap(snapshot.glazes), [snapshot.glazes]);
+  const firingById = useMemo(() => createRecordMap(firings), [firings]);
+  const environmentByFiringId = useMemo(
+    () => new Map(environmentRecords.map((record) => [record.firingId, record])),
+    [environmentRecords],
+  );
+  const popularPosts = useMemo(() => rankPopularPosts(snapshot.posts), [snapshot.posts]);
 
   useEffect(() => {
     let active = true;
@@ -356,8 +372,23 @@ export function KilnbookWorkspace({
   }, [feedTab]);
 
   const selectedFiring = useMemo(
-    () => firings.find((firing) => firing.id === selectedFiringId) ?? firings[0],
-    [firings, selectedFiringId],
+    () => firingById.get(selectedFiringId) ?? firings[0],
+    [firingById, firings, selectedFiringId],
+  );
+  const selectedKiln = useMemo(
+    () => (selectedFiring ? kilnById.get(selectedFiring.kilnId) : undefined),
+    [kilnById, selectedFiring],
+  );
+  const activeFiring = useMemo(
+    () => (activeAddFlow?.firingId ? firingById.get(activeAddFlow.firingId) : undefined),
+    [activeAddFlow?.firingId, firingById],
+  );
+  const activeEnvironment = useMemo(
+    () =>
+      activeAddFlow?.firingId
+        ? environmentByFiringId.get(activeAddFlow.firingId)
+        : undefined,
+    [activeAddFlow?.firingId, environmentByFiringId],
   );
 
   const ratePoints = useMemo(
@@ -368,8 +399,8 @@ export function KilnbookWorkspace({
     [liveReadings, selectedFiring?.id],
   );
   const selectedEnvironment = useMemo(
-    () => environmentRecords.find((record) => record.firingId === selectedFiring?.id),
-    [environmentRecords, selectedFiring?.id],
+    () => (selectedFiring ? environmentByFiringId.get(selectedFiring.id) : undefined),
+    [environmentByFiringId, selectedFiring],
   );
 
   const estimate = useMemo(
@@ -377,12 +408,8 @@ export function KilnbookWorkspace({
       estimateFiringDuration({
         kilnType: selectedFiring?.firingType ?? "electric",
         fuelType: selectedFiring?.firingType === "electric" ? "electric" : "gas",
-        kilnVolumeLiters:
-          snapshot.kilns.find((kiln) => kiln.id === selectedFiring?.kilnId)
-            ?.usableVolumeLiters ?? 262,
-        powerKw:
-          snapshot.kilns.find((kiln) => kiln.id === selectedFiring?.kilnId)?.powerKw ??
-          11.5,
+        kilnVolumeLiters: selectedKiln?.usableVolumeLiters ?? 262,
+        powerKw: selectedKiln?.powerKw ?? 11.5,
         kilnAgeYears: 6,
         loadFullnessPercentage: selectedFiring?.loadFullnessPercentage ?? 65,
         wareDensity: "medium",
@@ -396,7 +423,7 @@ export function KilnbookWorkspace({
         startingAmbientC: 22,
         kilnLocation:
           selectedEnvironment?.kilnLocation ??
-          snapshot.kilns.find((kiln) => kiln.id === selectedFiring?.kilnId)?.defaultLocation ??
+          selectedKiln?.defaultLocation ??
           "indoors",
         humidityPercentage: selectedEnvironment?.humidityStartPercentage ?? 64,
         windSpeedKph: selectedEnvironment?.windSpeedKph ?? 14,
@@ -412,7 +439,7 @@ export function KilnbookWorkspace({
             totalCoolingMinutes: firing.totalCoolingMinutes ?? 0,
           })),
       }),
-    [firings, selectedEnvironment, selectedFiring, snapshot.kilns],
+    [firings, selectedEnvironment, selectedFiring, selectedKiln],
   );
 
   const handleQuickReading = () => {
@@ -504,7 +531,7 @@ export function KilnbookWorkspace({
   };
 
   const handleCreateFiring = (values: FiringFormValues) => {
-    const kiln = snapshot.kilns.find((item) => item.id === values.kilnId);
+    const kiln = kilnById.get(values.kilnId);
     const createdAt = new Date().toISOString();
     const newFiring: FiringRecord = {
       id: `firing-${Date.now()}`,
@@ -546,6 +573,11 @@ export function KilnbookWorkspace({
     setView(nextView === "Add" ? "Home" : nextView);
   };
 
+  const completeAddFlow = (desktopView: View) => {
+    setActiveAddFlow(null);
+    setView(isMobileAppViewport() ? "Profile" : desktopView);
+  };
+
   const recordAddDraft = (
     kind: AddKind,
     visibility: AddVisibility,
@@ -571,7 +603,7 @@ export function KilnbookWorkspace({
     createdAt: string,
     payload?: Partial<PreviousFiringPayload>,
   ) => {
-    const kiln = snapshot.kilns.find((item) => item.id === payload?.kilnId) ?? snapshot.kilns[0];
+    const kiln = (payload?.kilnId ? kilnById.get(payload.kilnId) : undefined) ?? snapshot.kilns[0];
     const newFiring: FiringRecord = {
       id: `firing-add-${Date.now()}`,
       ownerId: viewer.id,
@@ -647,7 +679,7 @@ export function KilnbookWorkspace({
 
     if (kind === "live_firing") {
       const firing = createAddFiring("live_firing", visibility, createdAt);
-      const kiln = snapshot.kilns.find((item) => item.id === firing.kilnId);
+      const kiln = kilnById.get(firing.kilnId);
       firingId = firing.id;
       upsertEnvironmentRecord(
         firing.id,
@@ -688,8 +720,7 @@ export function KilnbookWorkspace({
       payload.title,
       `${payload.coneRange} recipe with ${payload.baseMaterial} and ${payload.accentMaterial}.`,
     );
-    setActiveAddFlow(null);
-    setView("Glazes");
+    completeAddFlow("Glazes");
   };
 
   const handleSavePreviousFiring = (payload: PreviousFiringPayload) => {
@@ -700,25 +731,23 @@ export function KilnbookWorkspace({
       firing.title,
       `Backfilled ${firing.readableNumber} with ${payload.glazeId} and ${payload.clayBodyId}.`,
     );
-    setActiveAddFlow(null);
-    setView("Firings");
+    completeAddFlow("Firings");
   };
 
   const handleSaveGlazeResult = (payload: GlazeResultPayload) => {
-    const glaze = snapshot.glazes.find((item) => item.id === payload.glazeId);
-    const firing = firings.find((item) => item.id === payload.firingId);
+    const glaze = glazeById.get(payload.glazeId);
+    const firing = firingById.get(payload.firingId);
     recordAddDraft(
       "glaze_result",
       payload.visibility,
       payload.title,
       `${payload.rating}/100 result${payload.imageName ? ` with ${payload.imageName}` : ""}${firing ? ` linked to ${firing.readableNumber}` : ""}${glaze ? ` for ${glaze.name}` : ""}.`,
     );
-    setActiveAddFlow(null);
-    setView("Glazes");
+    completeAddFlow("Glazes");
   };
 
   const handleUpdateLiveFiringSetup = (firingId: string, payload: LiveFiringSetupPayload) => {
-    const kiln = snapshot.kilns.find((item) => item.id === payload.kilnId);
+    const kiln = kilnById.get(payload.kilnId);
     setFirings((items) =>
       items.map((firing) =>
         firing.id === firingId
@@ -756,7 +785,7 @@ export function KilnbookWorkspace({
           : firing,
       ),
     );
-    const firing = firings.find((item) => item.id === firingId);
+    const firing = firingById.get(firingId);
     const draftVisibility: AddVisibility =
       firing?.visibility === "private" || firing?.visibility === "followers" || firing?.visibility === "public"
         ? firing.visibility
@@ -767,8 +796,7 @@ export function KilnbookWorkspace({
       firing?.title ?? "Completed live firing",
       "Live firing ended and saved to the firing journal.",
     );
-    setActiveAddFlow(null);
-    setView("Firings");
+    completeAddFlow("Firings");
   };
 
   const displayView: View = activeAddFlow ? "Add" : view;
@@ -798,10 +826,8 @@ export function KilnbookWorkspace({
               flow={activeAddFlow}
               viewer={viewer}
               firings={firings}
-              activeFiring={firings.find((firing) => firing.id === activeAddFlow.firingId)}
-              activeEnvironment={environmentRecords.find(
-                (record) => record.firingId === activeAddFlow.firingId,
-              )}
+              activeFiring={activeFiring}
+              activeEnvironment={activeEnvironment}
               kilns={snapshot.kilns}
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
@@ -819,7 +845,7 @@ export function KilnbookWorkspace({
             <HomeScreen
               feedTab={feedTab}
               onFeedTabChange={setFeedTab}
-              posts={feedTab === "Following" ? snapshot.posts : rankPopularPosts(snapshot.posts)}
+              posts={feedTab === "Following" ? snapshot.posts : popularPosts}
               firings={firings}
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
@@ -2264,6 +2290,10 @@ function HomeScreen({
   onGoogleSignIn: () => void;
   onSignOut: () => void;
 }) {
+  const firingById = useMemo(() => createRecordMap(firings), [firings]);
+  const glazeById = useMemo(() => createRecordMap(glazes), [glazes]);
+  const clayBodyById = useMemo(() => createRecordMap(clayBodies), [clayBodies]);
+
   return (
     <div className="kb-grid-two kb-home-grid">
       <section className="kb-panel kb-feed-panel">
@@ -2302,9 +2332,9 @@ function HomeScreen({
               <FeedCard
                 key={post.id}
                 post={post}
-                firing={firings.find((item) => item.id === post.linkedFiringId)}
-                glaze={glazes.find((item) => item.id === post.linkedGlazeId)}
-                clayBody={clayBodies.find((item) => item.id === post.linkedClayBodyId)}
+                firing={post.linkedFiringId ? firingById.get(post.linkedFiringId) : undefined}
+                glaze={post.linkedGlazeId ? glazeById.get(post.linkedGlazeId) : undefined}
+                clayBody={post.linkedClayBodyId ? clayBodyById.get(post.linkedClayBodyId) : undefined}
               />
             ))
           )}
