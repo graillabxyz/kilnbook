@@ -975,7 +975,7 @@ function Sidebar({
     <aside className="kb-sidebar" aria-label="Primary navigation">
       <div className="kb-brand">
         <Image className="kb-brand-mark" src={BRAND_ASSETS.logo} alt="" width={40} height={40} />
-        <div>
+        <div className="kb-brand-text">
           <Image
             className="kb-wordmark"
             src={BRAND_ASSETS.wordmark}
@@ -1041,7 +1041,7 @@ function Header({
     >
       <div className="kb-title-lockup">
         <Image className="kb-header-logo" src={BRAND_ASSETS.logo} alt="" width={40} height={40} />
-        <div>
+        <div className="kb-title-text">
           <p className="kb-kicker">Workspace</p>
           {view === "Home" ? (
             <>

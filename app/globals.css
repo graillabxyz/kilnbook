@@ -128,19 +128,25 @@ button:disabled {
 
 .kb-brand {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.25rem 0.35rem 0.9rem;
+  align-items: flex-start;
+  gap: 0.82rem;
+  padding: 0.35rem 0.35rem 0.9rem;
 }
 
 .kb-brand-mark {
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2.55rem;
+  height: 2.55rem;
+  flex: 0 0 auto;
   display: block;
   border-radius: 8px;
-  padding: 0.24rem;
+  padding: 0.28rem;
   background: var(--kb-ivory);
   box-shadow: 0 9px 20px rgba(163, 67, 36, 0.2);
+}
+
+.kb-brand-text {
+  min-width: 0;
+  padding-top: 0.02rem;
 }
 
 .kb-wordmark,
@@ -150,7 +156,7 @@ button:disabled {
 }
 
 .kb-wordmark {
-  width: 9.6rem;
+  width: 9.45rem;
   height: auto;
 }
 
@@ -176,7 +182,7 @@ button:disabled {
 .kb-brand span {
   color: var(--kb-muted);
   font-size: 0.78rem;
-  margin-top: 0.12rem;
+  margin-top: 0.03rem;
 }
 
 .kb-nav {
@@ -303,8 +309,19 @@ button:disabled {
 .kb-title-lockup,
 .kb-logo-heading {
   display: flex;
-  align-items: center;
   gap: 0.72rem;
+}
+
+.kb-title-lockup {
+  align-items: flex-start;
+}
+
+.kb-logo-heading {
+  align-items: center;
+}
+
+.kb-title-text {
+  min-width: 0;
 }
 
 .kb-header-logo,
@@ -313,6 +330,14 @@ button:disabled {
   height: 2.5rem;
   object-fit: contain;
   flex: 0 0 auto;
+}
+
+.kb-header-logo {
+  margin-top: 1.52rem;
+}
+
+.kb-title-text .kb-kicker {
+  margin-bottom: 0.05rem;
 }
 
 .kb-logo-heading {
@@ -2094,6 +2119,7 @@ button:disabled {
   .kb-home-header .kb-header-logo {
     width: 2.2rem;
     height: 2.2rem;
+    margin-top: 0;
   }
 
   .kb-header-actions {
