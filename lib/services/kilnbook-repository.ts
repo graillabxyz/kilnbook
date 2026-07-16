@@ -102,6 +102,15 @@ function numberValue(value: unknown, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function focalPointValue(value: unknown): CeramicImage["focalPoint"] {
+  if (typeof value !== "object" || value === null) return { x: 0.5, y: 0.5 };
+  const point = value as { x?: unknown; y?: unknown };
+  return {
+    x: numberValue(point.x, 0.5),
+    y: numberValue(point.y, 0.5),
+  };
+}
+
 function arrayValue(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -293,7 +302,7 @@ function mapImage(row: Row): CeramicImage {
     storagePath: text(row.storage_path),
     altText: text(row.alt_text),
     caption: text(row.caption),
-    focalPoint: typeof row.focal_point === "object" && row.focal_point ? row.focal_point : { x: 0.5, y: 0.5 },
+    focalPoint: focalPointValue(row.focal_point),
     visibility: visibilityValue(row.visibility),
     firingIds: [],
     glazeIds: [],

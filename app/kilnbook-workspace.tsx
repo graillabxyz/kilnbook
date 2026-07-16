@@ -4904,7 +4904,7 @@ function GlazeCreateDialog({
   const [firingRange, setFiringRange] = useState("Cone 5-6");
   const [description, setDescription] = useState("");
   const [applicationNotes, setApplicationNotes] = useState("");
-  const [heroImageColor, setHeroImageColor] = useState(BRAND_COLORS.sun);
+  const [heroImageColor, setHeroImageColor] = useState<string>(BRAND_COLORS.sun);
   const [recipeVisibility, setRecipeVisibility] = useState<AddVisibility>("public");
   const [profileVisibility, setProfileVisibility] = useState<AddVisibility>("public");
   const [ingredients, setIngredients] = useState<GlazeIngredientDraft[]>([
@@ -5276,7 +5276,7 @@ function ClayBodyCreateDialog({
   const [shrinkagePercentage, setShrinkagePercentage] = useState("");
   const [coneRange, setConeRange] = useState("5-6");
   const [notes, setNotes] = useState("");
-  const [imageColor, setImageColor] = useState(BRAND_COLORS.stone);
+  const [imageColor, setImageColor] = useState<string>(BRAND_COLORS.stone);
   const [profileVisibility, setProfileVisibility] = useState<AddVisibility>("public");
   const canSave = name.trim().length >= 2;
 
