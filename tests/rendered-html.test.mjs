@@ -48,3 +48,32 @@ test("starter preview files and dependency are removed", async () => {
   assert.match(layout, /PRODUCT\.name/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
+
+test("brand system is documented and wired into the app", async () => {
+  const [brandDoc, globals, layout, workspace, brandConstants] = await Promise.all([
+    readFile(new URL("../docs/brand.md", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/brand.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(brandDoc, /Flux and Fire Brand System/);
+  assert.match(brandDoc, /public\/flux-and-fire-logo\.svg/);
+  assert.match(brandDoc, /public\/flux-and-fire-wordmark\.svg/);
+  assert.match(brandDoc, /Cormorant Garamond/);
+  assert.match(brandDoc, /Inter/);
+  assert.match(brandDoc, /#a34324/);
+  assert.match(brandDoc, /#315d67/);
+
+  assert.match(globals, /--font-brand: "Cormorant Garamond", serif;/);
+  assert.match(globals, /--font-ui: "Inter", sans-serif;/);
+  assert.match(globals, /--kb-terracotta: #a34324;/);
+  assert.match(globals, /--kb-cobalt: #315d67;/);
+  assert.match(layout, /fonts\.googleapis\.com/);
+  assert.match(layout, /Cormorant\+Garamond/);
+  assert.match(layout, /family=Inter/);
+  assert.match(workspace, /BRAND_ASSETS/);
+  assert.match(workspace, /BRAND_CHART_COLORS/);
+  assert.match(brandConstants, /BRAND_PROFILE_COLORS/);
+});

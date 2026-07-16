@@ -15,6 +15,20 @@
   --kb-moss: #657b54;
   --kb-clay: #c9794f;
   --kb-sun: #d4a24c;
+  --kb-iron: #8f4f3a;
+  --kb-stone: #b9855f;
+  --kb-ash-blue: #9bb4bd;
+  --kb-ivory: #fff8ef;
+  --kb-warm-panel: #f8efe5;
+  --kb-warm-highlight: #fff9f1;
+  --kb-nav-active: #efe6dc;
+  --kb-control: #eee4d8;
+  --kb-tag-neutral: #f5eee3;
+  --kb-terracotta-soft: #f4e2d7;
+  --kb-cobalt-soft: #e3eef0;
+  --kb-cobalt-soft-strong: #dce8ea;
+  --kb-stone-soft: #f0e4d4;
+  --kb-chart-grid: #ddd5ca;
   --kb-shadow: 0 20px 55px rgba(67, 48, 35, 0.12);
   --kb-radius: 8px;
 }
@@ -125,7 +139,7 @@ button:disabled {
   display: block;
   border-radius: 8px;
   padding: 0.24rem;
-  background: #fff8ef;
+  background: var(--kb-ivory);
   box-shadow: 0 9px 20px rgba(163, 67, 36, 0.2);
 }
 
@@ -194,7 +208,7 @@ button:disabled {
 .kb-nav button:hover,
 .kb-nav button.active {
   color: var(--kb-ink);
-  background: #efe6dc;
+  background: var(--kb-nav-active);
 }
 
 .kb-nav button.active {
@@ -464,7 +478,7 @@ button:disabled {
 .kb-add-option.active,
 .kb-add-visibility-grid button.active {
   border-color: rgba(163, 67, 36, 0.42);
-  background: #fff8ef;
+  background: var(--kb-ivory);
   box-shadow: inset 0 0 0 1px rgba(163, 67, 36, 0.12);
 }
 
@@ -489,7 +503,7 @@ button:disabled {
   margin-top: 0.85rem;
   border: 1px solid var(--kb-line);
   border-radius: 8px;
-  background: #f8efe5;
+  background: var(--kb-warm-panel);
   padding: 0.7rem;
 }
 
@@ -548,7 +562,7 @@ button:disabled {
   align-content: start;
   border: 1px solid rgba(163, 67, 36, 0.24);
   border-radius: 8px;
-  background: #fff8ef;
+  background: var(--kb-ivory);
   padding: 0.72rem;
 }
 
@@ -601,7 +615,7 @@ button:disabled {
   padding: 0.25rem;
   border-radius: 8px;
   border: 1px solid var(--kb-line);
-  background: #eee4d8;
+  background: var(--kb-control);
 }
 
 .kb-segmented.small button {
@@ -982,7 +996,7 @@ button:disabled {
   border-radius: 7px;
   padding: 0 0.55rem;
   border: 1px solid var(--kb-line);
-  background: #f5eee3;
+  background: var(--kb-tag-neutral);
   color: #55473d;
   font-size: 0.78rem;
   font-weight: 500;
@@ -997,20 +1011,20 @@ button:disabled {
 .kb-chip.record {
   color: #78351f;
   border-color: rgba(163, 67, 36, 0.26);
-  background: #f4e2d7;
+  background: var(--kb-terracotta-soft);
 }
 
 .kb-chip.image {
   color: #2a5660;
   border-color: rgba(49, 93, 103, 0.25);
-  background: #e3eef0;
+  background: var(--kb-cobalt-soft);
 }
 
 .kb-chip.clay,
 .kb-chip.image.clay {
   color: #674321;
   border-color: rgba(185, 133, 95, 0.3);
-  background: #f0e4d4;
+  background: var(--kb-stone-soft);
 }
 
 .kb-chip.action,
@@ -1108,7 +1122,7 @@ button:disabled {
 .kb-list button.active {
   color: var(--kb-ink);
   border-color: rgba(143, 79, 58, 0.32);
-  background: #fff9f1;
+  background: var(--kb-warm-highlight);
 }
 
 .kb-list small {
@@ -1135,7 +1149,7 @@ button:disabled {
 }
 
 .kb-live-panel {
-  background: #f8efe5;
+  background: var(--kb-warm-panel);
 }
 
 .kb-live-panel h3 {
@@ -1196,7 +1210,7 @@ button:disabled {
 }
 
 .kb-log-table > div:first-child {
-  background: #efe6dc;
+  background: var(--kb-nav-active);
   color: var(--kb-muted);
   font-weight: 700;
 }
@@ -1376,7 +1390,7 @@ button:disabled {
 
 .kb-message-row.active {
   border-color: rgba(163, 67, 36, 0.32);
-  background: #fff9f1;
+  background: var(--kb-warm-highlight);
   color: var(--kb-ink);
 }
 
@@ -1415,7 +1429,7 @@ button:disabled {
 }
 
 .kb-bubble.received {
-  background: #efe6dc;
+  background: var(--kb-nav-active);
 }
 
 .kb-bubble.sent {
@@ -1476,7 +1490,7 @@ button:disabled {
 
 .kb-profile-type-grid button.active {
   border-color: rgba(163, 67, 36, 0.3);
-  background: #f4e2d7;
+  background: var(--kb-terracotta-soft);
   color: var(--kb-terracotta);
 }
 
@@ -1541,7 +1555,7 @@ button:disabled {
 
 .kb-visibility.followers {
   color: #315d67;
-  background: #dce8ea;
+  background: var(--kb-cobalt-soft-strong);
 }
 
 .kb-visibility.studio {

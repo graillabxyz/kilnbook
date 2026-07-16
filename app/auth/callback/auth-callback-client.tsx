@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BRAND_ASSETS } from "@/lib/brand";
 import { PRODUCT } from "@/lib/product";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -50,12 +51,12 @@ export function AuthCallbackClient() {
     <main className="kb-auth-callback">
       <section className="kb-panel">
         <div className="kb-logo-heading">
-          <Image src="/flux-and-fire-logo.svg" alt="" width={58} height={58} />
+          <Image src={BRAND_ASSETS.logo} alt="" width={58} height={58} />
           <div>
             <p className="kb-kicker">Google sign-in</p>
             <Image
               className="kb-wordmark-large"
-              src="/flux-and-fire-wordmark.svg"
+              src={BRAND_ASSETS.wordmark}
               alt={PRODUCT.name}
               width={236}
               height={39}

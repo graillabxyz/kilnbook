@@ -1,7 +1,6 @@
 import type { User } from "@supabase/supabase-js";
+import { BRAND_PROFILE_COLORS } from "@/lib/brand";
 import type { AuthProvider, Profile } from "@/lib/domain";
-
-const PROFILE_COLORS = ["#a34324", "#315d67", "#657b54", "#8f4f3a", "#b9855f"];
 
 function metadataString(metadata: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
@@ -60,7 +59,7 @@ export function getUserProviderId(user: User) {
 
 export function getUserAvatarColor(seed: string) {
   const total = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return PROFILE_COLORS[total % PROFILE_COLORS.length];
+  return BRAND_PROFILE_COLORS[total % BRAND_PROFILE_COLORS.length];
 }
 
 export function profileFromSupabaseUser(user: User, baseProfile: Profile): Profile {

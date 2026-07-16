@@ -53,6 +53,7 @@ The test command builds the app, runs Phase 1 business-rule tests, and verifies 
 - Security review: `docs/security-review.md`
 - Usability review: `docs/usability-review.md`
 - Accessibility review: `docs/accessibility-review.md`
+- Brand system: `docs/brand.md`
 
 ## Canonical Relationship Summary
 

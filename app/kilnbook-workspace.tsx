@@ -51,6 +51,7 @@ import {
   YAxis,
 } from "recharts";
 import { z } from "zod";
+import { BRAND_ASSETS, BRAND_CHART_COLORS, BRAND_COLORS } from "@/lib/brand";
 import type {
   ClayBodyProfile,
   FiringRecord,
@@ -569,11 +570,11 @@ function Sidebar({
   return (
     <aside className="kb-sidebar" aria-label="Primary navigation">
       <div className="kb-brand">
-        <Image className="kb-brand-mark" src="/flux-and-fire-logo.svg" alt="" width={40} height={40} />
+        <Image className="kb-brand-mark" src={BRAND_ASSETS.logo} alt="" width={40} height={40} />
         <div>
           <Image
             className="kb-wordmark"
-            src="/flux-and-fire-wordmark.svg"
+            src={BRAND_ASSETS.wordmark}
             alt={PRODUCT.name}
             width={184}
             height={30}
@@ -628,14 +629,14 @@ function Header({
   return (
     <header className={view === "Home" ? "kb-header kb-home-header" : "kb-header"}>
       <div className="kb-title-lockup">
-        <Image className="kb-header-logo" src="/flux-and-fire-logo.svg" alt="" width={40} height={40} />
+        <Image className="kb-header-logo" src={BRAND_ASSETS.logo} alt="" width={40} height={40} />
         <div>
           <p className="kb-kicker">Workspace</p>
           {view === "Home" ? (
             <>
               <Image
                 className="kb-header-wordmark"
-                src="/flux-and-fire-wordmark.svg"
+                src={BRAND_ASSETS.wordmark}
                 alt=""
                 width={235}
                 height={39}
@@ -1458,12 +1459,12 @@ function DashboardScreen({
           <div className="kb-chart">
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={ratePoints}>
-                <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
+                <CartesianGrid strokeDasharray="4 6" stroke={BRAND_CHART_COLORS.grid} />
                 <XAxis dataKey="elapsedMinutes" tickFormatter={(value) => `${value / 60}h`} />
                 <YAxis tickFormatter={(value) => `${value}C`} />
                 <Tooltip formatter={(value) => [`${value}C`, "Temperature"]} />
-                <Line type="monotone" dataKey="actualTemperatureC" stroke="#8f4f3a" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="targetTemperatureC" stroke="#315d67" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Line type="monotone" dataKey="actualTemperatureC" stroke={BRAND_CHART_COLORS.actual} strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="targetTemperatureC" stroke={BRAND_CHART_COLORS.target} strokeWidth={2} strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -1476,11 +1477,11 @@ function DashboardScreen({
           <div className="kb-chart">
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={atmosphereData(filteredFirings)}>
-                <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
+                <CartesianGrid strokeDasharray="4 6" stroke={BRAND_CHART_COLORS.grid} />
                 <XAxis dataKey="name" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#315d67" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill={BRAND_CHART_COLORS.barPrimary} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1711,15 +1712,15 @@ function ScheduleEditor({
             <AreaChart data={ratePoints}>
               <defs>
                 <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8f4f3a" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#8f4f3a" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={BRAND_CHART_COLORS.actual} stopOpacity={0.28} />
+                  <stop offset="95%" stopColor={BRAND_CHART_COLORS.actual} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
+              <CartesianGrid strokeDasharray="4 6" stroke={BRAND_CHART_COLORS.grid} />
               <XAxis dataKey="elapsedMinutes" tickFormatter={(value) => `${value / 60}h`} />
               <YAxis tickFormatter={(value) => `${value}C`} />
               <Tooltip />
-              <Area type="monotone" dataKey="actualTemperatureC" stroke="#8f4f3a" fill="url(#curveFill)" strokeWidth={3} />
+              <Area type="monotone" dataKey="actualTemperatureC" stroke={BRAND_CHART_COLORS.actual} fill="url(#curveFill)" strokeWidth={3} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -2028,7 +2029,7 @@ function GlazesScreen({
               title={`Untitled glaze ${index + 1}`}
               eyebrow="draft"
               detail="Ready for recipe details"
-              color="#d4a24c"
+              color={BRAND_COLORS.sun}
             />
           ))}
           {glazes.map((item) => (
@@ -2129,7 +2130,7 @@ function ClayBodiesScreen({
               title={`Untitled clay body ${index + 1}`}
               eyebrow="draft"
               detail="Ready for clay properties"
-              color="#b9855f"
+              color={BRAND_COLORS.stone}
             />
           ))}
           {clayBodies.map((item) => (
@@ -2206,7 +2207,7 @@ function KilnsScreen({
               title={`Untitled kiln ${index + 1}`}
               eyebrow="draft"
               detail="Ready for specs"
-              color="#657b54"
+              color={BRAND_COLORS.moss}
             />
           ))}
           {kilns.map((kiln) => (
@@ -2215,7 +2216,7 @@ function KilnsScreen({
               title={kiln.name}
               eyebrow={kiln.kilnType}
               detail={`${kiln.usableVolumeLiters} L · ${kiln.recommendedConeRange}`}
-              color={kiln.kilnType === "electric" ? "#315d67" : "#8f4f3a"}
+              color={kiln.kilnType === "electric" ? BRAND_COLORS.cobalt : BRAND_COLORS.iron}
             />
           ))}
         </div>
@@ -2463,11 +2464,11 @@ function AnalyticsScreen({
                 { name: "F042", cost: 44 },
                 { name: "F017", cost: 51 },
               ]}>
-                <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
+                <CartesianGrid strokeDasharray="4 6" stroke={BRAND_CHART_COLORS.grid} />
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => `$${value}`} />
                 <Tooltip />
-                <Bar dataKey="cost" fill="#8f4f3a" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="cost" fill={BRAND_CHART_COLORS.barSecondary} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -2619,13 +2620,13 @@ function LibraryScreen({
       </div>
       <div className="kb-library-grid">
         <button type="button" onClick={() => onViewChange("Glazes")}>
-          <LibraryCard title="Glazes" eyebrow={`${glazes.length} profiles`} detail="Recipes and results" color="#9bb4bd" />
+          <LibraryCard title="Glazes" eyebrow={`${glazes.length} profiles`} detail="Recipes and results" color={BRAND_COLORS.ashBlue} />
         </button>
         <button type="button" onClick={() => onViewChange("Clay Bodies")}>
-          <LibraryCard title="Clay Bodies" eyebrow={`${clayBodies.length} profiles`} detail="Fit and fired color" color="#b9855f" />
+          <LibraryCard title="Clay Bodies" eyebrow={`${clayBodies.length} profiles`} detail="Fit and fired color" color={BRAND_COLORS.stone} />
         </button>
         <button type="button" onClick={() => onViewChange("Kilns")}>
-          <LibraryCard title="Kilns" eyebrow={`${kilns.length} profiles`} detail="Specs and maintenance" color="#315d67" />
+          <LibraryCard title="Kilns" eyebrow={`${kilns.length} profiles`} detail="Specs and maintenance" color={BRAND_COLORS.cobalt} />
         </button>
       </div>
     </section>
@@ -2636,12 +2637,12 @@ function MarketingLandingPreview() {
   return (
     <section className="kb-panel kb-landing-preview">
       <div className="kb-logo-heading">
-        <Image src="/flux-and-fire-logo.svg" alt="" width={58} height={58} />
+        <Image src={BRAND_ASSETS.logo} alt="" width={58} height={58} />
         <div>
           <p className="kb-kicker">Public landing page</p>
           <Image
             className="kb-wordmark-large"
-            src="/flux-and-fire-wordmark.svg"
+            src={BRAND_ASSETS.wordmark}
             alt={PRODUCT.name}
             width={236}
             height={39}
