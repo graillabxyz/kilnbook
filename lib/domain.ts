@@ -4,6 +4,8 @@ export type Visibility = "private" | "followers" | "studio" | "public";
 
 export type UserPlan = "free" | "professional" | "studio";
 
+export type AuthProvider = "email" | "google" | "magic_link" | "sso" | "unknown";
+
 export type ProfileType =
   | "artist"
   | "studio"
@@ -113,9 +115,14 @@ export interface Profile {
   displayName: string;
   username: string;
   avatarColor: string;
+  avatarUrl?: string;
   biography: string;
   profileType: ProfileType;
   identityLabel?: string;
+  email?: string;
+  authProvider: AuthProvider;
+  authProviderId?: string;
+  emailVerified: boolean;
   locationLabel?: string;
   website?: string;
   specialties: string[];

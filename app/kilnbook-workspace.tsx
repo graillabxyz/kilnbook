@@ -18,6 +18,8 @@ import {
   Image as ImageIcon,
   Inbox,
   Layers3,
+  LogOut,
+  Mail,
   LockKeyhole,
   MessageCircle,
   Microscope,
@@ -33,7 +35,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useForm } from "react-hook-form";
 import {
   Area,
@@ -63,9 +65,31 @@ import { calculateRateOfChange, estimateFiringDuration } from "@/lib/firing-calc
 import { rankPopularPosts } from "@/lib/feed-ranking";
 import { PRODUCT, PRIMARY_NAVIGATION, type PrimaryNavigationItem } from "@/lib/product";
 import type { KilnbookWorkspaceSnapshot } from "@/lib/services/kilnbook-repository";
+import {
+  createSupabaseBrowserClient,
+  isSupabaseBrowserConfigured,
+  signInWithGoogle,
+  signOutOfSupabase,
+} from "@/lib/supabase/client";
+import { profileFromSupabaseUser } from "@/lib/supabase/auth-profile";
 import { formatTemperature } from "@/lib/units";
 
 type View = PrimaryNavigationItem | "Library";
+type AuthStatus =
+  | { state: "loading"; message: string }
+  | { state: "signed-in"; message: string }
+  | { state: "signed-out"; message: string }
+  | { state: "unconfigured"; message: string }
+  | { state: "error"; message: string };
+type AddKind = "glaze_recipe" | "live_firing" | "previous_firing" | "glaze_result";
+type AddDraft = {
+  id: string;
+  kind: AddKind;
+  visibility: Extract<Visibility, "private" | "followers" | "public">;
+  title: string;
+  detail: string;
+  createdAt: string;
+};
 
 const firingFormSchema = z.object({
   title: z.string().min(3, "Give the firing a clear title."),
@@ -102,6 +126,20 @@ export function KilnbookWorkspace({
   snapshot: KilnbookWorkspaceSnapshot;
 }) {
   const [view, setView] = useState<View>("Home");
+  const [supabaseConfigured] = useState(isSupabaseBrowserConfigured);
+  const [viewer, setViewer] = useState<Profile>(snapshot.viewer);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(() =>
+    supabaseConfigured
+      ? {
+          state: "loading",
+          message: "Checking Supabase session.",
+        }
+      : {
+          state: "unconfigured",
+          message:
+            "Supabase browser client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+        },
+  );
   const [feedTab, setFeedTab] = useState<"Following" | "Popular">(() => {
     if (typeof window === "undefined") return "Following";
     const saved = window.localStorage.getItem("flux-and-fire.feed-tab");
@@ -112,6 +150,67 @@ export function KilnbookWorkspace({
   const [selectedFiringId, setSelectedFiringId] = useState(snapshot.firings[0]?.id ?? "");
   const [imageTags, setImageTags] = useState(snapshot.images[1]?.glazeIds ?? []);
   const [query, setQuery] = useState("");
+  const [addChooserOpen, setAddChooserOpen] = useState(false);
+  const [addDrafts, setAddDrafts] = useState<AddDraft[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!supabaseConfigured) return undefined;
+
+    const supabase = createSupabaseBrowserClient();
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) throw error;
+        if (data.session?.user) {
+          setViewer(profileFromSupabaseUser(data.session.user, snapshot.viewer));
+          setAuthStatus({
+            state: "signed-in",
+            message: "Signed in with Supabase Auth.",
+          });
+          return;
+        }
+        setViewer(snapshot.viewer);
+        setAuthStatus({
+          state: "signed-out",
+          message: "Previewing the app without a Supabase session.",
+        });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setViewer(snapshot.viewer);
+        setAuthStatus({
+          state: "error",
+          message: error instanceof Error ? error.message : "Unable to read Supabase session.",
+        });
+      });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      if (session?.user) {
+        setViewer(profileFromSupabaseUser(session.user, snapshot.viewer));
+        setAuthStatus({
+          state: "signed-in",
+          message: "Signed in with Supabase Auth.",
+        });
+        return;
+      }
+      setViewer(snapshot.viewer);
+      setAuthStatus({
+        state: "signed-out",
+        message: "Previewing the app without a Supabase session.",
+      });
+    });
+    const unsubscribe = () => data.subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [snapshot.viewer, supabaseConfigured]);
 
   useEffect(() => {
     window.localStorage.setItem("flux-and-fire.feed-tab", feedTab);
@@ -201,7 +300,7 @@ export function KilnbookWorkspace({
     const kiln = snapshot.kilns.find((item) => item.id === values.kilnId);
     const newFiring: FiringRecord = {
       id: `firing-${Date.now()}`,
-      ownerId: snapshot.viewer.id,
+      ownerId: viewer.id,
       title: values.title,
       readableNumber: `Firing ${String(firings.length + 40).padStart(3, "0")}`,
       kilnId: values.kilnId,
@@ -214,7 +313,7 @@ export function KilnbookWorkspace({
       visibility: "private",
       plannedStartAt: new Date().toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      leadFirer: snapshot.viewer.displayName,
+      leadFirer: viewer.displayName,
       targetTemperatureC: values.targetTemperatureC,
       targetCone: values.targetCone,
       atmosphere: kiln?.kilnType === "gas" ? "reduction" : "oxidation",
@@ -225,17 +324,123 @@ export function KilnbookWorkspace({
     setSelectedFiringId(newFiring.id);
   };
 
+  const handleGoogleSignIn = async () => {
+    setAuthStatus({ state: "loading", message: "Opening Google sign-in." });
+    const { error } = await signInWithGoogle("/");
+    if (error) {
+      setAuthStatus({ state: "error", message: error.message });
+    }
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await signOutOfSupabase();
+    if (error) {
+      setAuthStatus({ state: "error", message: error.message });
+      return;
+    }
+    setViewer(snapshot.viewer);
+    setAuthStatus({
+      state: "signed-out",
+      message: "Previewing the app without a Supabase session.",
+    });
+  };
+
+  const handleAddChoice = (
+    kind: AddKind,
+    visibility: Extract<Visibility, "private" | "followers" | "public">,
+  ) => {
+    const now = new Date();
+    const createdAt = now.toISOString();
+    const draftMeta: Record<AddKind, Pick<AddDraft, "title" | "detail">> = {
+      glaze_recipe: {
+        title: "New glaze recipe",
+        detail:
+          visibility === "private"
+            ? "Recipe draft saved for your eyes only."
+            : "Recipe draft ready to share with the community.",
+      },
+      live_firing: {
+        title: "Live firing tracking",
+        detail: "Live firing data draft started with readings, notes, and photos ready.",
+      },
+      previous_firing: {
+        title: "Previous firing record",
+        detail: "Backfill draft started for an older firing and connected results.",
+      },
+      glaze_result: {
+        title: "Glaze result",
+        detail: "Result draft ready for images, clay body, firing, and glaze tags.",
+      },
+    };
+    const draft: AddDraft = {
+      id: `add-${kind}-${now.getTime()}`,
+      kind,
+      visibility,
+      createdAt,
+      ...draftMeta[kind],
+    };
+
+    setAddDrafts((items) => [draft, ...items]);
+
+    if (kind === "live_firing" || kind === "previous_firing") {
+      const kiln = snapshot.kilns[0];
+      const newFiring: FiringRecord = {
+        id: `firing-add-${now.getTime()}`,
+        ownerId: viewer.id,
+        title: kind === "live_firing" ? "Live firing tracking" : "Previous firing record",
+        readableNumber: `Firing ${String(firings.length + 40).padStart(3, "0")}`,
+        kilnId: kiln?.id ?? "kiln-draft",
+        kilnNameSnapshot: kiln?.name ?? "Select kiln",
+        kilnSpecSnapshot: kiln
+          ? `${kiln.manufacturer} ${kiln.model}, ${kiln.usableVolumeLiters} L`
+          : "Kiln details pending",
+        firingType: kiln?.kilnType ?? "electric",
+        status: kind === "live_firing" ? "in_progress" : "completed",
+        visibility,
+        plannedStartAt: createdAt,
+        actualStartAt: kind === "previous_firing" ? createdAt : undefined,
+        actualEndAt:
+          kind === "previous_firing"
+            ? new Date(now.getTime() + 10 * 60 * 60 * 1000).toISOString()
+            : undefined,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        leadFirer: viewer.displayName,
+        targetTemperatureC: 1222,
+        targetCone: "6",
+        atmosphere: kiln?.kilnType === "gas" ? "reduction" : "oxidation",
+        loadFullnessPercentage: 50,
+        totalHeatingMinutes: kind === "previous_firing" ? 620 : undefined,
+        totalCoolingMinutes: kind === "previous_firing" ? 840 : undefined,
+        notes:
+          kind === "live_firing"
+            ? "Started from the global Add flow for live tracking."
+            : "Started from the global Add flow as a previous firing.",
+      };
+
+      setFirings((items) => [newFiring, ...items]);
+      setSelectedFiringId(newFiring.id);
+      setView("Firings");
+    } else {
+      setView("Glazes");
+    }
+
+    setAddChooserOpen(false);
+  };
+
   return (
     <main className="min-h-screen bg-[var(--kb-bg)] text-[var(--kb-ink)]">
       <div className="kb-shell">
         <Sidebar view={view} onViewChange={setView} />
         <section className={view === "Home" ? "kb-main kb-main-home" : "kb-main"}>
           <Header
-            viewerName={snapshot.viewer.displayName}
+            viewerName={viewer.displayName}
             view={view}
             query={query}
             onQueryChange={setQuery}
-            onCreate={() => setView("Firings")}
+            onCreate={() => setAddChooserOpen(true)}
+            onOpenNotifications={() => setView("Settings")}
+            onOpenProfile={() => setView("Profile")}
+            onSearchSubmit={() => setView("Explore")}
           />
           {view === "Home" && (
             <HomeScreen
@@ -246,6 +451,10 @@ export function KilnbookWorkspace({
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
               onOpenExplore={() => setView("Explore")}
+              viewer={viewer}
+              authStatus={authStatus}
+              onGoogleSignIn={handleGoogleSignIn}
+              onSignOut={handleSignOut}
             />
           )}
           {view === "Dashboard" && (
@@ -268,6 +477,9 @@ export function KilnbookWorkspace({
               ratePoints={ratePoints}
               estimate={estimate}
               imageTags={imageTags}
+              addDrafts={addDrafts.filter((draft) =>
+                draft.kind === "live_firing" || draft.kind === "previous_firing",
+              )}
               onSelectFiring={setSelectedFiringId}
               onQuickReading={handleQuickReading}
               onCreateFiring={handleCreateFiring}
@@ -281,6 +493,9 @@ export function KilnbookWorkspace({
               applications={snapshot.glazeApplications}
               clayBodies={snapshot.clayBodies}
               firings={firings}
+              addDrafts={addDrafts.filter((draft) =>
+                draft.kind === "glaze_recipe" || draft.kind === "glaze_result",
+              )}
             />
           )}
           {view === "Clay Bodies" && (
@@ -308,7 +523,7 @@ export function KilnbookWorkspace({
           )}
           {view === "Analytics" && (
             <AnalyticsScreen
-              plan={snapshot.viewer.subscriptionTier}
+              plan={viewer.subscriptionTier}
               firings={firings}
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
@@ -316,12 +531,13 @@ export function KilnbookWorkspace({
           )}
           {view === "Profile" && (
             <ProfileScreen
-              viewer={snapshot.viewer}
+              viewer={viewer}
               posts={snapshot.posts}
+              drafts={addDrafts}
               onOpenSettings={() => setView("Settings")}
             />
           )}
-          {view === "Settings" && <SettingsScreen plan={snapshot.viewer.subscriptionTier} />}
+          {view === "Settings" && <SettingsScreen viewer={viewer} />}
           {view === "Library" && (
             <LibraryScreen
               glazes={snapshot.glazes}
@@ -332,7 +548,13 @@ export function KilnbookWorkspace({
           )}
         </section>
       </div>
-      <MobileNav view={view} onViewChange={setView} />
+      <MobileNav view={view} onViewChange={setView} onAdd={() => setAddChooserOpen(true)} />
+      {addChooserOpen && (
+        <AddChooser
+          onClose={() => setAddChooserOpen(false)}
+          onConfirm={handleAddChoice}
+        />
+      )}
     </main>
   );
 }
@@ -349,7 +571,14 @@ function Sidebar({
       <div className="kb-brand">
         <Image className="kb-brand-mark" src="/flux-and-fire-logo.svg" alt="" width={40} height={40} />
         <div>
-          <strong>{PRODUCT.name}</strong>
+          <Image
+            className="kb-wordmark"
+            src="/flux-and-fire-wordmark.svg"
+            alt={PRODUCT.name}
+            width={184}
+            height={30}
+            priority
+          />
           <span>Ceramic process library</span>
         </div>
       </div>
@@ -383,12 +612,18 @@ function Header({
   query,
   onQueryChange,
   onCreate,
+  onOpenNotifications,
+  onOpenProfile,
+  onSearchSubmit,
 }: {
   viewerName: string;
   view: View;
   query: string;
   onQueryChange: (query: string) => void;
   onCreate: () => void;
+  onOpenNotifications: () => void;
+  onOpenProfile: () => void;
+  onSearchSubmit: () => void;
 }) {
   return (
     <header className={view === "Home" ? "kb-header kb-home-header" : "kb-header"}>
@@ -396,10 +631,30 @@ function Header({
         <Image className="kb-header-logo" src="/flux-and-fire-logo.svg" alt="" width={40} height={40} />
         <div>
           <p className="kb-kicker">Workspace</p>
-          <h1>{view === "Home" ? PRODUCT.name : view === "Library" ? "Library" : view}</h1>
+          {view === "Home" ? (
+            <>
+              <Image
+                className="kb-header-wordmark"
+                src="/flux-and-fire-wordmark.svg"
+                alt=""
+                width={235}
+                height={39}
+                priority
+              />
+              <h1 className="sr-only">{PRODUCT.name}</h1>
+            </>
+          ) : (
+            <h1>{view === "Library" ? "Library" : view}</h1>
+          )}
         </div>
       </div>
-      <label className="kb-search">
+      <form
+        className="kb-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSearchSubmit();
+        }}
+      >
         <Search size={17} aria-hidden="true" />
         <span className="sr-only">Search Flux and Fire</span>
         <input
@@ -407,21 +662,170 @@ function Header({
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Search firings, glazes, clay bodies"
         />
-      </label>
+      </form>
       <div className="kb-header-actions">
-        <button type="button" className="kb-icon-button" aria-label="Notifications">
+        <button
+          type="button"
+          className="kb-icon-button"
+          aria-label="Open notification settings"
+          onClick={onOpenNotifications}
+        >
           <Bell size={18} />
         </button>
         <button type="button" className="kb-primary-button" onClick={onCreate}>
           <Plus size={18} />
           <span>Add</span>
         </button>
-        <div className="kb-account-chip">
+        <button type="button" className="kb-account-chip" onClick={onOpenProfile}>
+          <UserRound size={16} aria-hidden="true" />
           <span>{viewerName}</span>
-          <ChevronDown size={16} aria-hidden="true" />
-        </div>
+        </button>
       </div>
     </header>
+  );
+}
+
+function AddChooser({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (
+    kind: AddKind,
+    visibility: Extract<Visibility, "private" | "followers" | "public">,
+  ) => void;
+}) {
+  const [kind, setKind] = useState<AddKind>("glaze_recipe");
+  const [visibility, setVisibility] =
+    useState<Extract<Visibility, "private" | "followers" | "public">>("public");
+  const addOptions: Array<{
+    kind: AddKind;
+    title: string;
+    body: string;
+    icon: LucideIcon;
+  }> = [
+    {
+      kind: "glaze_recipe",
+      title: "Glaze recipe",
+      body: "Share materials, version notes, firing range, and optional private notes.",
+      icon: Layers3,
+    },
+    {
+      kind: "live_firing",
+      title: "Live firing data",
+      body: "Start tracking readings, atmosphere, notes, and photos during a firing.",
+      icon: Flame,
+    },
+    {
+      kind: "previous_firing",
+      title: "Previous firing",
+      body: "Backfill an older firing with kiln data, clay bodies, and glaze links.",
+      icon: ClipboardList,
+    },
+    {
+      kind: "glaze_result",
+      title: "Glaze result",
+      body: "Add finished images and connect the result to a firing, recipe, and clay body.",
+      icon: Camera,
+    },
+  ];
+  const visibilityOptions: Array<{
+    visibility: Extract<Visibility, "private" | "followers" | "public">;
+    title: string;
+    body: string;
+  }> = [
+    {
+      visibility: "public",
+      title: "Public",
+      body: "Default for sharing recipes and results with the ceramics community.",
+    },
+    {
+      visibility: "followers",
+      title: "Followers only",
+      body: "Visible on your profile to people who follow you.",
+    },
+    {
+      visibility: "private",
+      title: "Private",
+      body: "Only visible to you. Useful for experiments or recipes you are not ready to share.",
+    },
+  ];
+  const selectedOption = addOptions.find((option) => option.kind === kind) ?? addOptions[0];
+  const SelectedIcon = selectedOption.icon;
+
+  return (
+    <div className="kb-modal-backdrop" role="presentation">
+      <section
+        className="kb-add-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-dialog-title"
+      >
+        <div className="kb-section-title compact">
+          <div>
+            <p className="kb-kicker">Add to profile</p>
+            <h2 id="add-dialog-title">What do you want to add?</h2>
+          </div>
+          <button type="button" className="kb-icon-button" aria-label="Close add chooser" onClick={onClose}>
+            <CircleX size={18} />
+          </button>
+        </div>
+        <div className="kb-add-option-grid">
+          {addOptions.map((option) => {
+            const Icon = option.icon;
+            return (
+              <button
+                type="button"
+                key={option.kind}
+                className={kind === option.kind ? "kb-add-option active" : "kb-add-option"}
+                aria-pressed={kind === option.kind}
+                onClick={() => setKind(option.kind)}
+              >
+                <Icon size={20} />
+                <strong>{option.title}</strong>
+                <span>{option.body}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="kb-add-privacy">
+          <div>
+            <p className="kb-kicker">Visibility</p>
+            <h3>Choose how this appears on your profile</h3>
+          </div>
+          <div className="kb-add-visibility-grid">
+            {visibilityOptions.map((option) => (
+              <button
+                type="button"
+                key={option.visibility}
+                className={visibility === option.visibility ? "active" : ""}
+                aria-pressed={visibility === option.visibility}
+                onClick={() => setVisibility(option.visibility)}
+              >
+                <strong>{option.title}</strong>
+                <span>{option.body}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="kb-add-summary">
+          <SelectedIcon size={18} />
+          <span>
+            {selectedOption.title} will be saved to your profile as{" "}
+            <strong>{visibility === "followers" ? "followers only" : visibility}</strong>.
+          </span>
+        </div>
+        <div className="kb-add-actions">
+          <button type="button" className="kb-quiet-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="kb-primary-button" onClick={() => onConfirm(kind, visibility)}>
+            <Plus size={18} />
+            <span>Continue</span>
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -433,6 +837,10 @@ function HomeScreen({
   glazes,
   clayBodies,
   onOpenExplore,
+  viewer,
+  authStatus,
+  onGoogleSignIn,
+  onSignOut,
 }: {
   feedTab: "Following" | "Popular";
   onFeedTabChange: (tab: "Following" | "Popular") => void;
@@ -441,6 +849,10 @@ function HomeScreen({
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
   onOpenExplore: () => void;
+  viewer: Profile;
+  authStatus: AuthStatus;
+  onGoogleSignIn: () => void;
+  onSignOut: () => void;
 }) {
   return (
     <div className="kb-grid-two kb-home-grid">
@@ -490,7 +902,12 @@ function HomeScreen({
       </section>
       <aside className="kb-stack kb-home-rail">
         <MarketingLandingPreview />
-        <AuthOnboardingPreview />
+        <AuthOnboardingPreview
+          viewer={viewer}
+          authStatus={authStatus}
+          onGoogleSignIn={onGoogleSignIn}
+          onSignOut={onSignOut}
+        />
       </aside>
     </div>
   );
@@ -517,6 +934,8 @@ function PostComposer({
   clayBodies: ClayBodyProfile[];
   firings: FiringRecord[];
 }) {
+  const [postText, setPostText] = useState("");
+  const [publishNotice, setPublishNotice] = useState("");
   const [selectedFiringId, setSelectedFiringId] = useState("");
   const [selectedGlazeIds, setSelectedGlazeIds] = useState<string[]>([]);
   const [selectedClayBodyIds, setSelectedClayBodyIds] = useState<string[]>([]);
@@ -538,6 +957,15 @@ function PostComposer({
   ]);
 
   const selectedFiring = firings.find((firing) => firing.id === selectedFiringId);
+  const hasImageTags = composerImages.some(
+    (image) => image.glazeIds.length > 0 || image.clayBodyIds.length > 0,
+  );
+  const canPublish =
+    Boolean(postText.trim()) ||
+    Boolean(selectedFiringId) ||
+    selectedGlazeIds.length > 0 ||
+    selectedClayBodyIds.length > 0 ||
+    hasImageTags;
 
   const addUnique = (values: string[], value: string) =>
     value && !values.includes(value) ? [...values, value] : values;
@@ -595,11 +1023,23 @@ function PostComposer({
     ]);
   };
 
+  const handlePublish = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canPublish) {
+      setPublishNotice("Add text, a record link, or an image tag before publishing.");
+      return;
+    }
+    setPublishNotice("Post draft is ready with the selected links and image tags.");
+    setPostText("");
+  };
+
   return (
-    <form className="kb-composer">
+    <form className="kb-composer" onSubmit={handlePublish}>
       <label>
         <span className="sr-only">Post text</span>
         <textarea
+          value={postText}
+          onChange={(event) => setPostText(event.target.value)}
           placeholder="Post an old firing, a glaze result you liked, or a kiln-opening note. Link only the process data you want to share."
           rows={3}
         />
@@ -833,11 +1273,12 @@ function PostComposer({
       </div>
       <div className="kb-composer-footer">
         <p>Public previews read from canonical records and only include fields the viewer is authorized to see.</p>
-        <button type="button" className="kb-primary-button">
+        <button type="submit" className="kb-primary-button" disabled={!canPublish}>
           <Send size={17} />
           <span>Publish</span>
         </button>
       </div>
+      {publishNotice && <p className="kb-muted-note">{publishNotice}</p>}
     </form>
   );
 }
@@ -853,6 +1294,28 @@ function FeedCard({
   glaze?: GlazeProfile;
   clayBody?: ClayBodyProfile;
 }) {
+  const [liked, setLiked] = useState(post.viewerLiked);
+  const [likes, setLikes] = useState(post.likes);
+  const [comments, setComments] = useState(post.comments);
+  const [commenting, setCommenting] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const toggleLike = () => {
+    setLiked((current) => {
+      setLikes((count) => count + (current ? -1 : 1));
+      return !current;
+    });
+  };
+
+  const handleCommentSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!commentDraft.trim()) return;
+    setComments((count) => count + 1);
+    setCommentDraft("");
+    setCommenting(false);
+  };
+
   return (
     <article className="kb-feed-card">
       <div className="kb-feed-author">
@@ -887,19 +1350,33 @@ function FeedCard({
         {clayBody && <span className="kb-chip image clay">{clayBody.bodyType}</span>}
       </div>
       <div className="kb-feed-actions">
-        <button type="button" aria-pressed={post.viewerLiked}>
-          <Heart size={17} fill={post.viewerLiked ? "currentColor" : "none"} />
-          <span>{post.likes}</span>
+        <button type="button" aria-pressed={liked} onClick={toggleLike}>
+          <Heart size={17} fill={liked ? "currentColor" : "none"} />
+          <span>{likes}</span>
         </button>
-        <button type="button">
+        <button type="button" aria-expanded={commenting} onClick={() => setCommenting((open) => !open)}>
           <MessageCircle size={17} />
-          <span>{post.comments}</span>
+          <span>{comments}</span>
         </button>
-        <button type="button">
-          <BookOpen size={17} />
-          <span>Save</span>
+        <button type="button" aria-pressed={saved} onClick={() => setSaved((current) => !current)}>
+          <BookOpen size={17} fill={saved ? "currentColor" : "none"} />
+          <span>{saved ? "Saved" : "Save"}</span>
         </button>
       </div>
+      {commenting && (
+        <form className="kb-inline-comment" onSubmit={handleCommentSubmit}>
+          <input
+            aria-label={`Comment on ${post.authorName}'s post`}
+            value={commentDraft}
+            onChange={(event) => setCommentDraft(event.target.value)}
+            placeholder="Add a concise process note"
+          />
+          <button type="submit" className="kb-primary-button" disabled={!commentDraft.trim()}>
+            <Send size={16} />
+            <span>Post</span>
+          </button>
+        </form>
+      )}
     </article>
   );
 }
@@ -917,7 +1394,21 @@ function DashboardScreen({
   selectedFiring?: FiringRecord;
   ratePoints: ReturnType<typeof calculateRateOfChange>;
 }) {
-  const completed = firings.filter((firing) => firing.status === "completed");
+  const [timeframe, setTimeframe] = useState<"7" | "30" | "90" | "365" | "all">("90");
+  const timeframeLabel =
+    timeframe === "all" ? "All time" : timeframe === "365" ? "This year" : `Last ${timeframe} days`;
+  const latestFiringTime = Math.max(
+    ...firings
+      .map((firing) => new Date(firing.actualStartAt ?? firing.plannedStartAt ?? 0).getTime())
+      .filter(Number.isFinite),
+  );
+  const filteredFirings = firings.filter((firing) => {
+    if (timeframe === "all") return true;
+    const timestamp = firing.actualStartAt ?? firing.plannedStartAt;
+    if (!timestamp) return false;
+    return latestFiringTime - new Date(timestamp).getTime() <= Number(timeframe) * 24 * 60 * 60 * 1000;
+  });
+  const completed = filteredFirings.filter((firing) => firing.status === "completed");
   const kilnHours = completed.reduce(
     (total, firing) => total + (firing.totalHeatingMinutes ?? 0) / 60,
     0,
@@ -931,22 +1422,28 @@ function DashboardScreen({
       <section className="kb-panel">
         <div className="kb-section-title">
           <div>
-            <p className="kb-kicker">Last 90 days</p>
+            <p className="kb-kicker">{timeframeLabel}</p>
             <h2>Firing and process dashboard</h2>
           </div>
           <span className="kb-select-wrap kb-timeframe-select">
-            <select aria-label="Dashboard timeframe" defaultValue="90">
+            <select
+              aria-label="Dashboard timeframe"
+              value={timeframe}
+              onChange={(event) =>
+                setTimeframe(event.target.value as "7" | "30" | "90" | "365" | "all")
+              }
+            >
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
-              <option value="year">This year</option>
+              <option value="365">This year</option>
               <option value="all">All time</option>
             </select>
             <ChevronDown size={16} aria-hidden="true" />
           </span>
         </div>
         <div className="kb-metrics">
-          <MetricCard label="Total firings" value={String(firings.length)} detail="3 completed, 1 planned" icon={Flame} />
+          <MetricCard label="Total firings" value={String(filteredFirings.length)} detail={`${completed.length} completed`} icon={Flame} />
           <MetricCard label="Kiln hours" value={kilnHours.toFixed(1)} detail="Heating time recorded" icon={Gauge} />
           <MetricCard label="Successful results" value={`${Math.round(successAverage)}%`} detail="Based on rated applications" icon={CheckCircle2} />
           <MetricCard label="Glaze tests" value={String(glazes.length + 5)} detail={`${clayBodies.length} clay bodies represented`} icon={Layers3} />
@@ -978,7 +1475,7 @@ function DashboardScreen({
           </div>
           <div className="kb-chart">
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={atmosphereData(firings)}>
+              <BarChart data={atmosphereData(filteredFirings)}>
                 <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
                 <XAxis dataKey="name" />
                 <YAxis allowDecimals={false} />
@@ -1007,6 +1504,7 @@ function FiringsScreen({
   onQuickReading,
   onCreateFiring,
   onTagsChange,
+  addDrafts,
 }: {
   firings: FiringRecord[];
   selectedFiring: FiringRecord;
@@ -1021,6 +1519,7 @@ function FiringsScreen({
   onQuickReading: () => void;
   onCreateFiring: (values: FiringFormValues) => void;
   onTagsChange: (tags: string[]) => void;
+  addDrafts: AddDraft[];
 }) {
   return (
     <div className="kb-grid-two">
@@ -1030,11 +1529,8 @@ function FiringsScreen({
             <p className="kb-kicker">Firing journal</p>
             <h2>Records, live firing, schedule, and results</h2>
           </div>
-          <button type="button" className="kb-primary-button" onClick={onQuickReading}>
-            <Thermometer size={18} />
-            <span>Quick reading</span>
-          </button>
         </div>
+        <AddDraftList drafts={addDrafts} />
         <div className="kb-firing-layout">
           <div className="kb-list">
             {firings.map((firing) => (
@@ -1100,6 +1596,19 @@ function LiveFiringPanel({
   onQuickReading: () => void;
 }) {
   const latest = ratePoints.at(-1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+  const [atmosphere, setAtmosphere] = useState(selectedFiring.atmosphere);
+  const [photoName, setPhotoName] = useState("");
+
+  const saveNote = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!noteDraft.trim()) return;
+    setSavedNote(noteDraft.trim());
+    setNoteDraft("");
+  };
+
   return (
     <section className="kb-live-panel">
       <div>
@@ -1115,21 +1624,55 @@ function LiveFiringPanel({
           <Thermometer size={19} />
           <span>Add reading</span>
         </button>
-        <button type="button">
+        <button type="button" onClick={() => setNoteDraft((value) => value || "Damper held steady; cones beginning to bend.")}>
           <ClipboardList size={19} />
           <span>Note</span>
         </button>
-        <button type="button">
+        <button
+          type="button"
+          onClick={() =>
+            setAtmosphere((current) =>
+              current === "oxidation" ? "reduction" : current === "reduction" ? "neutral" : "oxidation",
+            )
+          }
+        >
           <Wind size={19} />
           <span>Atmosphere</span>
         </button>
-        <button type="button">
+        <button type="button" onClick={() => fileInputRef.current?.click()}>
           <Camera size={19} />
           <span>Photo</span>
         </button>
       </div>
+      <input
+        ref={fileInputRef}
+        className="sr-only"
+        type="file"
+        accept="image/*"
+        aria-label="Add firing photo"
+        onChange={(event) => setPhotoName(event.target.files?.[0]?.name ?? "")}
+      />
+      <form className="kb-live-tool-panel" onSubmit={saveNote}>
+        <label>
+          <span>Firing note</span>
+          <textarea
+            value={noteDraft}
+            onChange={(event) => setNoteDraft(event.target.value)}
+            placeholder="Add an observation from this firing"
+          />
+        </label>
+        <button type="submit" className="kb-quiet-button" disabled={!noteDraft.trim()}>
+          Save note
+        </button>
+      </form>
+      {(savedNote || photoName) && (
+        <div className="kb-muted-note">
+          {savedNote && <span>Latest note: {savedNote}</span>}
+          {photoName && <span>Queued photo: {photoName}</span>}
+        </div>
+      )}
       <p className="kb-safety-note">
-        Advisory range {estimate.totalHoursRange[0]}-{estimate.totalHoursRange[1]} hours. Manual readings are not kiln-control data; follow kiln manufacturer and local safety procedures.
+        Current atmosphere note: {atmosphere.replaceAll("_", " ")}. Advisory range {estimate.totalHoursRange[0]}-{estimate.totalHoursRange[1]} hours. Manual readings are not kiln-control data; follow kiln manufacturer and local safety procedures.
       </p>
     </section>
   );
@@ -1140,49 +1683,80 @@ function ScheduleEditor({
 }: {
   ratePoints: ReturnType<typeof calculateRateOfChange>;
 }) {
+  const [mode, setMode] = useState<"Graph" | "Table" | "Segments">("Graph");
+  const segmentPoints = ratePoints.slice(-3);
+
   return (
     <section className="kb-subpanel">
       <div className="kb-section-title compact">
         <h3>Schedule editor</h3>
         <div className="kb-segmented small" role="tablist" aria-label="Schedule editor modes">
-          <button type="button" className="active">Graph</button>
-          <button type="button">Table</button>
-          <button type="button">Segments</button>
+          {(["Graph", "Table", "Segments"] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="tab"
+              aria-selected={mode === item}
+              className={mode === item ? "active" : ""}
+              onClick={() => setMode(item)}
+            >
+              {item}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="kb-chart short">
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={ratePoints}>
-            <defs>
-              <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8f4f3a" stopOpacity={0.28} />
-                <stop offset="95%" stopColor="#8f4f3a" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
-            <XAxis dataKey="elapsedMinutes" tickFormatter={(value) => `${value / 60}h`} />
-            <YAxis tickFormatter={(value) => `${value}C`} />
-            <Tooltip />
-            <Area type="monotone" dataKey="actualTemperatureC" stroke="#8f4f3a" fill="url(#curveFill)" strokeWidth={3} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="kb-log-table" role="table" aria-label="Firing log readings">
-        <div role="row">
-          <span role="columnheader">Elapsed</span>
-          <span role="columnheader">Actual</span>
-          <span role="columnheader">Rate</span>
-          <span role="columnheader">Atmosphere</span>
+      {mode === "Graph" && (
+        <div className="kb-chart short">
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={ratePoints}>
+              <defs>
+                <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8f4f3a" stopOpacity={0.28} />
+                  <stop offset="95%" stopColor="#8f4f3a" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 6" stroke="#ddd5ca" />
+              <XAxis dataKey="elapsedMinutes" tickFormatter={(value) => `${value / 60}h`} />
+              <YAxis tickFormatter={(value) => `${value}C`} />
+              <Tooltip />
+              <Area type="monotone" dataKey="actualTemperatureC" stroke="#8f4f3a" fill="url(#curveFill)" strokeWidth={3} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
-        {ratePoints.slice(-4).map((point) => (
-          <div role="row" key={point.id}>
-            <span role="cell">{point.elapsedMinutes} min</span>
-            <span role="cell">{formatTemperature(point.actualTemperatureC, "c")}</span>
-            <span role="cell">{point.rateCPerHour ? `${point.rateCPerHour} C/hr` : "first point"}</span>
-            <span role="cell">{point.atmosphere?.replaceAll("_", " ") ?? "not set"}</span>
+      )}
+      {mode === "Table" && (
+        <div className="kb-log-table" role="table" aria-label="Firing log readings">
+          <div role="row">
+            <span role="columnheader">Elapsed</span>
+            <span role="columnheader">Actual</span>
+            <span role="columnheader">Rate</span>
+            <span role="columnheader">Atmosphere</span>
           </div>
-        ))}
-      </div>
+          {ratePoints.slice(-4).map((point) => (
+            <div role="row" key={point.id}>
+              <span role="cell">{point.elapsedMinutes} min</span>
+              <span role="cell">{formatTemperature(point.actualTemperatureC, "c")}</span>
+              <span role="cell">{point.rateCPerHour ? `${point.rateCPerHour} C/hr` : "first point"}</span>
+              <span role="cell">{point.atmosphere?.replaceAll("_", " ") ?? "not set"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {mode === "Segments" && (
+        <div className="kb-comparison-list">
+          {segmentPoints.map((point, index) => (
+            <div key={point.id}>
+              <strong>Segment {index + 1}</strong>
+              <span>{point.elapsedMinutes} min · {formatTemperature(point.actualTemperatureC, "c")}</span>
+              <progress
+                value={Math.min(point.actualTemperatureC, 1300)}
+                max={1300}
+                aria-label={`Segment ${index + 1} temperature progress`}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1201,15 +1775,27 @@ function ResultPanel({
   onTagsChange: (tags: string[]) => void;
 }) {
   const suggestedTags = glazes.slice(0, 3);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [queuedImage, setQueuedImage] = useState("");
+
   return (
     <section className="kb-subpanel">
       <div className="kb-section-title compact">
         <h3>Completed results and image tags</h3>
-        <button type="button" className="kb-quiet-button">
+        <button type="button" className="kb-quiet-button" onClick={() => uploadInputRef.current?.click()}>
           <Camera size={17} />
-          <span>Upload</span>
+          <span>Add image</span>
         </button>
+        <input
+          ref={uploadInputRef}
+          className="sr-only"
+          type="file"
+          accept="image/*"
+          aria-label="Add result image"
+          onChange={(event) => setQueuedImage(event.target.files?.[0]?.name ?? "")}
+        />
       </div>
+      {queuedImage && <p className="kb-muted-note">Queued image: {queuedImage}</p>}
       <div className="kb-result-grid">
         {applications.map((application) => {
           const glaze = glazes.find((item) => item.id === application.glazeId);
@@ -1256,8 +1842,6 @@ function ResultPanel({
               Add {glaze.name}
             </button>
           ))}
-          <button type="button" className="kb-chip action">Copy previous</button>
-          <button type="button" className="kb-chip action">Apply to all</button>
         </div>
       </div>
     </section>
@@ -1407,15 +1991,18 @@ function GlazesScreen({
   applications,
   clayBodies,
   firings,
+  addDrafts,
 }: {
   glazes: GlazeProfile[];
   recipes: { glazeId: string; versionNumber: number; visibility: Visibility; changeSummary: string; ingredients: { materialName: string; percentage: number; role: string }[] }[];
   applications: { glazeId: string; clayBodyId: string | null; firingId: string; resultRating?: number }[];
   clayBodies: ClayBodyProfile[];
   firings: FiringRecord[];
+  addDrafts: AddDraft[];
 }) {
   const glaze = glazes[0];
   const glazeRecipes = recipes.filter((recipe) => recipe.glazeId === glaze.id);
+  const [draftGlazeCount, setDraftGlazeCount] = useState(0);
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -1424,12 +2011,26 @@ function GlazesScreen({
             <p className="kb-kicker">Glaze library</p>
             <h2>Canonical glaze profiles and recipe versions</h2>
           </div>
-          <button type="button" className="kb-primary-button">
+          <button
+            type="button"
+            className="kb-primary-button"
+            onClick={() => setDraftGlazeCount((count) => count + 1)}
+          >
             <Plus size={18} />
             <span>New glaze</span>
           </button>
         </div>
+        <AddDraftList drafts={addDrafts} />
         <div className="kb-library-grid">
+          {Array.from({ length: draftGlazeCount }, (_, index) => (
+            <LibraryCard
+              key={`draft-glaze-${index}`}
+              title={`Untitled glaze ${index + 1}`}
+              eyebrow="draft"
+              detail="Ready for recipe details"
+              color="#d4a24c"
+            />
+          ))}
           {glazes.map((item) => (
             <LibraryCard
               key={item.id}
@@ -1503,6 +2104,7 @@ function ClayBodiesScreen({
 }) {
   const clay = clayBodies[0];
   const related = applications.filter((application) => application.clayBodyId === clay.id);
+  const [draftClayCount, setDraftClayCount] = useState(0);
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -1511,12 +2113,25 @@ function ClayBodiesScreen({
             <p className="kb-kicker">Clay-body library</p>
             <h2>First-class clay records across firings and glaze results</h2>
           </div>
-          <button type="button" className="kb-primary-button">
+          <button
+            type="button"
+            className="kb-primary-button"
+            onClick={() => setDraftClayCount((count) => count + 1)}
+          >
             <Plus size={18} />
             <span>New clay body</span>
           </button>
         </div>
         <div className="kb-library-grid">
+          {Array.from({ length: draftClayCount }, (_, index) => (
+            <LibraryCard
+              key={`draft-clay-${index}`}
+              title={`Untitled clay body ${index + 1}`}
+              eyebrow="draft"
+              detail="Ready for clay properties"
+              color="#b9855f"
+            />
+          ))}
           {clayBodies.map((item) => (
             <LibraryCard
               key={item.id}
@@ -1566,6 +2181,7 @@ function KilnsScreen({
   kilns: KilnProfile[];
   firings: FiringRecord[];
 }) {
+  const [draftKilnCount, setDraftKilnCount] = useState(0);
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -1574,12 +2190,25 @@ function KilnsScreen({
             <p className="kb-kicker">Kiln profiles</p>
             <h2>Canonical kiln records with historical firing snapshots</h2>
           </div>
-          <button type="button" className="kb-primary-button">
+          <button
+            type="button"
+            className="kb-primary-button"
+            onClick={() => setDraftKilnCount((count) => count + 1)}
+          >
             <Plus size={18} />
             <span>New kiln</span>
           </button>
         </div>
         <div className="kb-library-grid">
+          {Array.from({ length: draftKilnCount }, (_, index) => (
+            <LibraryCard
+              key={`draft-kiln-${index}`}
+              title={`Untitled kiln ${index + 1}`}
+              eyebrow="draft"
+              detail="Ready for specs"
+              color="#657b54"
+            />
+          ))}
           {kilns.map((kiln) => (
             <LibraryCard
               key={kiln.id}
@@ -1706,6 +2335,26 @@ function MessagesScreen({
 }: {
   conversations: { id: string; participantName: string; participantUsername: string; unreadCount: number; lastMessage: string; updatedAt: string; linkedRecordLabel?: string }[];
 }) {
+  const [selectedConversationId, setSelectedConversationId] = useState(conversations[0]?.id ?? "");
+  const [draft, setDraft] = useState("");
+  const [sentMessages, setSentMessages] = useState<Record<string, string[]>>({});
+  const selectedConversation =
+    conversations.find((conversation) => conversation.id === selectedConversationId) ??
+    conversations[0];
+  const selectedMessages = selectedConversation
+    ? sentMessages[selectedConversation.id] ?? []
+    : [];
+
+  const sendMessage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedConversation || !draft.trim()) return;
+    setSentMessages((messages) => ({
+      ...messages,
+      [selectedConversation.id]: [...(messages[selectedConversation.id] ?? []), draft.trim()],
+    }));
+    setDraft("");
+  };
+
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -1717,7 +2366,12 @@ function MessagesScreen({
         </div>
         <div className="kb-message-list">
           {conversations.map((conversation) => (
-            <button type="button" key={conversation.id} className="kb-message-row">
+            <button
+              type="button"
+              key={conversation.id}
+              className={conversation.id === selectedConversation?.id ? "kb-message-row active" : "kb-message-row"}
+              onClick={() => setSelectedConversationId(conversation.id)}
+            >
               <div className="kb-avatar">{conversation.participantName.slice(0, 1)}</div>
               <div>
                 <strong>{conversation.participantName}</strong>
@@ -1731,15 +2385,25 @@ function MessagesScreen({
       </section>
       <aside className="kb-panel kb-conversation">
         <div className="kb-section-title compact">
-          <h3>Jules Navarro</h3>
+          <h3>{selectedConversation?.participantName ?? "Conversation"}</h3>
           <span>Typing indicators and realtime updates use scoped subscriptions.</span>
         </div>
         <div className="kb-bubble received">Can you send the curve from the top thermocouple before the next soda load?</div>
         <div className="kb-bubble sent">Yes. I tagged the wind gusts and damper notes on Firing 042 so the comparison is readable.</div>
         <div className="kb-bubble received">Perfect. I will link it to the celadon test thread.</div>
-        <form className="kb-message-compose">
-          <input aria-label="Message" placeholder="Message Jules" />
-          <button type="button" className="kb-primary-button">
+        {selectedMessages.map((message, index) => (
+          <div className="kb-bubble sent" key={`${selectedConversation?.id}-${index}`}>
+            {message}
+          </div>
+        ))}
+        <form className="kb-message-compose" onSubmit={sendMessage}>
+          <input
+            aria-label="Message"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={`Message ${selectedConversation?.participantName ?? "profile"}`}
+          />
+          <button type="submit" className="kb-primary-button" disabled={!draft.trim()}>
             <Send size={17} />
             <span>Send</span>
           </button>
@@ -1816,10 +2480,12 @@ function AnalyticsScreen({
 function ProfileScreen({
   viewer,
   posts,
+  drafts,
   onOpenSettings,
 }: {
   viewer: Profile;
   posts: Post[];
+  drafts: AddDraft[];
   onOpenSettings: () => void;
 }) {
   const profileIdentity = viewer.identityLabel ?? formatProfileType(viewer.profileType);
@@ -1827,7 +2493,16 @@ function ProfileScreen({
     <div className="kb-grid-two">
       <section className="kb-panel">
         <div className="kb-profile-head">
-          <div className="kb-avatar large">{viewer.displayName.slice(0, 1)}</div>
+          <div
+            className={viewer.avatarUrl ? "kb-avatar large photo" : "kb-avatar large"}
+            style={
+              viewer.avatarUrl
+                ? { backgroundImage: `url(${viewer.avatarUrl})` }
+                : { background: viewer.avatarColor }
+            }
+          >
+            {!viewer.avatarUrl && viewer.displayName.slice(0, 1)}
+          </div>
           <div>
             <p className="kb-kicker">Public profile</p>
             <h2>{viewer.displayName}</h2>
@@ -1849,9 +2524,14 @@ function ProfileScreen({
             <strong>Posts</strong>
             <small>Optional links and image tags</small>
           </span>
+          <span>
+            <strong>Auth</strong>
+            <small>{viewer.authProvider === "google" ? "Google OAuth" : "Supabase Auth"}</small>
+          </span>
         </div>
         <div className="kb-chip-row">
           <span className="kb-chip record">{profileIdentity}</span>
+          <span className="kb-chip">{viewer.emailVerified ? "verified email" : "email pending"}</span>
           {viewer.specialties.map((specialty) => (
             <span className="kb-chip" key={specialty}>{specialty}</span>
           ))}
@@ -1873,12 +2553,14 @@ function ProfileScreen({
             <small>likes</small>
           </div>
         ))}
+        <AddDraftList drafts={drafts.slice(0, 4)} compact />
       </aside>
     </div>
   );
 }
 
-function SettingsScreen({ plan }: { plan: "free" | "professional" | "studio" }) {
+function SettingsScreen({ viewer }: { viewer: Profile }) {
+  const plan = viewer.subscriptionTier;
   const messaging = getEntitlementDecision(plan, "limited_messaging");
   const privateHistory = getEntitlementDecision(plan, "private_recipe_history");
   return (
@@ -1891,8 +2573,11 @@ function SettingsScreen({ plan }: { plan: "free" | "professional" | "studio" }) 
           </div>
         </div>
         <div className="kb-settings-list">
-          <SettingRow title="Email and password" body="Enabled through Supabase Auth with password reset." />
-          <SettingRow title="Magic link and Google" body="Configured in Supabase providers, with secure session handling." />
+          <SettingRow
+            title="Supabase Auth"
+            body={`${viewer.authProvider === "google" ? "Google OAuth" : "Email auth"} profile model${viewer.emailVerified ? " with verified email" : ""}.`}
+          />
+          <SettingRow title="Account email" body={viewer.email ?? "Private until a Supabase session is connected."} />
           <SettingRow title="Profile identity" body="Choose artist, studio, educator, researcher, collective, supplier, or a custom label." />
           <SettingRow title="Preferred units" body="Celsius, grams, liters, and kph stored as normalized presentation preferences." />
           <SettingRow title="Profile visibility" body="Public profile, private email, configurable notification preferences." />
@@ -1954,7 +2639,13 @@ function MarketingLandingPreview() {
         <Image src="/flux-and-fire-logo.svg" alt="" width={58} height={58} />
         <div>
           <p className="kb-kicker">Public landing page</p>
-          <h2>{PRODUCT.name}</h2>
+          <Image
+            className="kb-wordmark-large"
+            src="/flux-and-fire-wordmark.svg"
+            alt={PRODUCT.name}
+            width={236}
+            height={39}
+          />
         </div>
       </div>
       <p>{PRODUCT.description}</p>
@@ -1975,27 +2666,80 @@ function MarketingLandingPreview() {
   );
 }
 
-function AuthOnboardingPreview() {
+function AuthOnboardingPreview({
+  viewer,
+  authStatus,
+  onGoogleSignIn,
+  onSignOut,
+}: {
+  viewer: Profile;
+  authStatus: AuthStatus;
+  onGoogleSignIn: () => void;
+  onSignOut: () => void;
+}) {
+  const [selectedType, setSelectedType] = useState("Artist");
+  const [mode, setMode] = useState<"Sign in" | "Sign up">("Sign in");
+  const connected = authStatus.state === "signed-in";
+
   return (
     <section className="kb-panel">
       <p className="kb-kicker">Onboarding</p>
       <h3>Profile setup checklist</h3>
       <div className="kb-profile-type-grid" aria-label="Profile identity options">
-        {["Artist", "Studio", "Researcher", "Educator", "Collective", "Custom"].map((label, index) => (
-          <button type="button" className={index === 0 ? "active" : ""} key={label}>
+        {["Artist", "Studio", "Researcher", "Educator", "Collective", "Custom"].map((label) => (
+          <button
+            type="button"
+            className={selectedType === label ? "active" : ""}
+            key={label}
+            aria-pressed={selectedType === label}
+            onClick={() => setSelectedType(label)}
+          >
             {label}
           </button>
         ))}
       </div>
       <div className="kb-checklist">
-        <span><CheckCircle2 size={17} /> Name and username</span>
-        <span><CheckCircle2 size={17} /> Identity label</span>
+        <span><CheckCircle2 size={17} /> {viewer.displayName} · @{viewer.username}</span>
+        <span><CheckCircle2 size={17} /> {selectedType} identity</span>
         <span><CheckCircle2 size={17} /> Preferred units</span>
         <span><CheckCircle2 size={17} /> First firing, glaze, or clay body</span>
       </div>
       <div className="kb-auth-tabs">
-        <button type="button" className="active">Sign in</button>
-        <button type="button">Sign up</button>
+        {(["Sign in", "Sign up"] as const).map((label) => (
+          <button
+            type="button"
+            className={mode === label ? "active" : ""}
+            key={label}
+            aria-pressed={mode === label}
+            onClick={() => setMode(label)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="kb-auth-card">
+        <span>
+          {connected
+            ? `${viewer.authProvider === "google" ? "Google" : "Supabase"} account connected`
+            : authStatus.message}
+        </span>
+        {viewer.email && <small>{viewer.emailVerified ? "Verified" : "Unverified"} email: {viewer.email}</small>}
+        {connected ? (
+          <button type="button" className="kb-quiet-button" onClick={onSignOut}>
+            <LogOut size={17} />
+            <span>Sign out</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="kb-primary-button full"
+            onClick={onGoogleSignIn}
+            disabled={authStatus.state === "loading" || authStatus.state === "unconfigured"}
+          >
+            <Mail size={17} />
+            <span>{mode === "Sign in" ? "Continue with Google" : "Sign up with Google"}</span>
+          </button>
+        )}
       </div>
     </section>
   );
@@ -2040,6 +2784,23 @@ function LibraryCard({
       <strong>{title}</strong>
       <small>{detail}</small>
     </article>
+  );
+}
+
+function AddDraftList({ drafts, compact = false }: { drafts: AddDraft[]; compact?: boolean }) {
+  if (drafts.length === 0) return null;
+
+  return (
+    <div className={compact ? "kb-add-draft-list compact" : "kb-add-draft-list"}>
+      {drafts.map((draft) => (
+        <div className="kb-add-draft" key={draft.id}>
+          <span className="kb-add-kind">{formatAddKind(draft.kind)}</span>
+          <strong>{draft.title}</strong>
+          <small>{draft.detail}</small>
+          <VisibilityPill visibility={draft.visibility} />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -2100,9 +2861,11 @@ function SettingRow({ title, body }: { title: string; body: string }) {
 function MobileNav({
   view,
   onViewChange,
+  onAdd,
 }: {
   view: View;
   onViewChange: (view: View) => void;
+  onAdd: () => void;
 }) {
   const items: Array<{ label: string; view: View; icon: LucideIcon; compose?: boolean }> = [
     { label: "Home", view: "Home", icon: BookOpen },
@@ -2122,7 +2885,7 @@ function MobileNav({
               view === item.view && !item.compose ? "active" : "",
               item.compose ? "compose" : "",
             ].filter(Boolean).join(" ")}
-            onClick={() => onViewChange(item.view)}
+            onClick={() => (item.compose ? onAdd() : onViewChange(item.view))}
           >
             <Icon size={20} />
             <span>{item.label}</span>
@@ -2153,4 +2916,8 @@ function formatProfileType(profileType: Profile["profileType"]) {
     .split("_")
     .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function formatAddKind(kind: AddKind) {
+  return kind.replaceAll("_", " ");
 }

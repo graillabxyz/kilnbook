@@ -38,9 +38,10 @@ export function redactPrivateProfile(profile: Profile, viewer: ViewerContext): P
   return {
     ...profile,
     biography: "",
+    email: undefined,
+    authProviderId: undefined,
     locationLabel: undefined,
     website: undefined,
     specialties: [],
   };
 }
-

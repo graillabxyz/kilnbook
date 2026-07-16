@@ -7,5 +7,9 @@
 5. Run `supabase/seed.sql` for lookup plans, entitlements, and ceramic materials.
 6. Create a private `flux-and-fire-images` storage bucket with derivative paths for `thumbnail`, `card`, `medium`, and plan-gated full resolution.
 7. Configure Supabase Auth providers for email/password, magic link, Google, and password reset.
+8. Add the app callback URL to Supabase Auth redirect URLs:
+   - Local: `http://localhost:3000/auth/callback`
+   - Production: `https://kilnbook-mu.vercel.app/auth/callback`
+9. Apply `0002_google_oauth_profiles.sql` so new Google or email users create a public profile row and private self-only auth details.
 
 The migration enables row-level security and uses canonical records plus join tables for firings, glazes, clay bodies, applications, pieces, images, and posts.
