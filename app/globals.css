@@ -8,10 +8,10 @@
   --kb-muted: #746b62;
   --kb-line: #ded5c9;
   --kb-line-strong: #c8b8a9;
-  --kb-terracotta: #8f4f3a;
+  --kb-terracotta: #a34324;
   --kb-cobalt: #315d67;
   --kb-moss: #657b54;
-  --kb-clay: #b9855f;
+  --kb-clay: #c9794f;
   --kb-sun: #d4a24c;
   --kb-shadow: 0 20px 55px rgba(67, 48, 35, 0.12);
   --kb-radius: 8px;
@@ -108,13 +108,11 @@ button:disabled {
 .kb-brand-mark {
   width: 2.4rem;
   height: 2.4rem;
-  display: grid;
-  place-items: center;
+  display: block;
   border-radius: 8px;
-  color: #fffdf9;
-  background: linear-gradient(135deg, var(--kb-terracotta), var(--kb-cobalt));
-  font-weight: 760;
-  box-shadow: 0 9px 20px rgba(143, 79, 58, 0.24);
+  padding: 0.24rem;
+  background: #fff8ef;
+  box-shadow: 0 9px 20px rgba(163, 67, 36, 0.2);
 }
 
 .kb-brand strong,
@@ -222,6 +220,30 @@ button:disabled {
 .kb-header h1 {
   font-size: clamp(1.45rem, 2.4vw, 2.35rem);
   line-height: 1.05;
+}
+
+.kb-title-lockup,
+.kb-logo-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+}
+
+.kb-header-logo,
+.kb-logo-heading img {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.kb-logo-heading {
+  margin-bottom: 0.4rem;
+}
+
+.kb-logo-heading img {
+  width: 3.6rem;
+  height: 3.6rem;
 }
 
 .kb-search {
@@ -1153,4 +1175,3 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
-

@@ -31,6 +31,7 @@ import {
   Wind,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
@@ -344,7 +345,7 @@ function Sidebar({
   return (
     <aside className="kb-sidebar" aria-label="Primary navigation">
       <div className="kb-brand">
-        <div className="kb-brand-mark">K</div>
+        <Image className="kb-brand-mark" src="/kilnbook-logo.svg" alt="" width={40} height={40} />
         <div>
           <strong>{PRODUCT.name}</strong>
           <span>Studio process library</span>
@@ -389,9 +390,12 @@ function Header({
 }) {
   return (
     <header className="kb-header">
-      <div>
-        <p className="kb-kicker">Workspace</p>
-        <h1>{view === "Library" ? "Library" : view}</h1>
+      <div className="kb-title-lockup">
+        <Image className="kb-header-logo" src="/kilnbook-logo.svg" alt="" width={40} height={40} />
+        <div>
+          <p className="kb-kicker">Workspace</p>
+          <h1>{view === "Library" ? "Library" : view}</h1>
+        </div>
       </div>
       <label className="kb-search">
         <Search size={17} aria-hidden="true" />
@@ -1619,8 +1623,13 @@ function LibraryScreen({
 function MarketingLandingPreview() {
   return (
     <section className="kb-panel kb-landing-preview">
-      <p className="kb-kicker">Public landing page</p>
-      <h2>{PRODUCT.name}</h2>
+      <div className="kb-logo-heading">
+        <Image src="/kilnbook-logo.svg" alt="" width={58} height={58} />
+        <div>
+          <p className="kb-kicker">Public landing page</p>
+          <h2>{PRODUCT.name}</h2>
+        </div>
+      </div>
       <p>{PRODUCT.description}</p>
       <div className="kb-product-shot" aria-label="Product screenshot mockup">
         <div className="kb-shot-sidebar" />
