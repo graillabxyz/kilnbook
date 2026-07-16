@@ -75,6 +75,12 @@ import type {
 import { getEntitlementDecision } from "@/lib/entitlements";
 import { calculateRateOfChange, estimateFiringDuration } from "@/lib/firing-calculator";
 import { rankPopularPosts } from "@/lib/feed-ranking";
+import {
+  FIRING_DETAIL_LEVELS,
+  FLUX_FIRE_GLAZY_REVIEW_PRINCIPLES,
+  GLAZE_RESULT_DETAIL_SECTIONS,
+  GLAZE_RESULT_SEARCH_FACETS,
+} from "@/lib/glaze-result-taxonomy";
 import { PRODUCT, PRIMARY_NAVIGATION, type PrimaryNavigationItem } from "@/lib/product";
 import type { KilnbookWorkspaceSnapshot } from "@/lib/services/kilnbook-repository";
 import {
@@ -4597,6 +4603,84 @@ function GlazesScreen({
   );
 }
 
+function GlazeResultDatabaseStructure() {
+  return (
+    <section className="kb-panel kb-result-database-panel">
+      <div className="kb-section-title">
+        <div>
+          <p className="kb-kicker">Result database</p>
+          <h2>Social posts that can deepen into searchable glaze evidence</h2>
+        </div>
+        <div className="kb-chip-row">
+          <span className="kb-chip">Image first</span>
+          <span className="kb-chip">Recipe aware</span>
+          <span className="kb-chip">Firing aware</span>
+          <span className="kb-chip">Analytics ready</span>
+        </div>
+      </div>
+      <div className="kb-database-lede">
+        <div>
+          <strong>Every public or authorized result group can become part of Explore.</strong>
+          <p>
+            A quick kiln-opening post can stay lightweight, while researchers can attach clay,
+            firing, recipe version, chemistry, and environment data when the evidence exists.
+          </p>
+        </div>
+        <div className="kb-database-principles" aria-label="Database principles">
+          {FLUX_FIRE_GLAZY_REVIEW_PRINCIPLES.slice(0, 3).map((principle) => (
+            <span key={principle}>{principle}</span>
+          ))}
+        </div>
+      </div>
+      <div className="kb-result-facet-grid">
+        {GLAZE_RESULT_SEARCH_FACETS.map((facet) => (
+          <article className="kb-result-facet-card" key={facet.group}>
+            <span>{facet.group}</span>
+            <strong>{facet.intent}</strong>
+            <div className="kb-chip-row">
+              {facet.fields.map((field) => (
+                <span className="kb-chip" key={field}>{field}</span>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="kb-result-structure-split">
+        <div>
+          <div className="kb-section-title compact">
+            <h3>Result detail structure</h3>
+            <span>From caption to chemistry</span>
+          </div>
+          <div className="kb-result-structure-grid">
+            {GLAZE_RESULT_DETAIL_SECTIONS.map((section) => (
+              <article className="kb-result-structure-card" key={section.title}>
+                <strong>{section.title}</strong>
+                <p>{section.summary}</p>
+                <small>{section.evidence.join(" / ")}</small>
+              </article>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="kb-section-title compact">
+            <h3>Firing detail ladder</h3>
+            <span>Unknowns are allowed</span>
+          </div>
+          <div className="kb-detail-ladder">
+            {FIRING_DETAIL_LEVELS.map((level) => (
+              <article key={level.level}>
+                <span>{level.level}</span>
+                <strong>{level.label}</strong>
+                <p>{level.example}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ClayBodiesScreen({
   viewer,
   clayBodies,
@@ -5624,6 +5708,7 @@ function ExploreScreen({
 
   return (
     <div className="kb-stack">
+      <GlazeResultDatabaseStructure />
       <section className="kb-panel">
         <div className="kb-section-title">
           <div>

@@ -28,7 +28,9 @@ Implemented in this scaffold:
 - Cursor-paginated Following and Popular feeds.
 - Direct messages through Supabase Realtime.
 - Bookmarks, collections, blocking, reporting, moderation queue.
-- Public glaze and clay-body database pages backed by authorized result queries.
+- Public glaze, clay-body, firing, and result database pages backed by authorized image result-group queries.
+- Explore search facets for social signal, visual result, ceramic context, recipe source, chemistry, and evidence quality.
+- Result detail pages that start from the post story and unfold into image annotations, glaze profiles, clay bodies, firing records, comments, and privacy-aware public previews.
 
 ## Phase 4: Paid Analytics
 
@@ -36,4 +38,4 @@ Implemented in this scaffold:
 - Saved dashboards.
 - Advanced correlations and exports.
 - Studio roles, approvals, audit history, and shared libraries.
-
+- Confidence-scored analytics across recipe versions, commercial glazes, clay bodies, firing curves, defects, UMF regions, and environment data.

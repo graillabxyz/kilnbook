@@ -104,6 +104,20 @@ Unknown data is valid data. Use "unknown", "unrecorded", or empty optional field
 - Historic firing creation should be lightweight. Live tracking should be optimized for current firings, not required for past firings.
 - Post privacy and record privacy must be separate. A public post may include public context while private recipes remain protected.
 
+## Searchable Result Database Conclusions
+
+The Glazy review in `docs/glazy-research.md` confirms that ceramicists need deep filtering by recipe, material, oxide, cone, atmosphere, surface, photo evidence, kiln schedule, and analysis. Flux and Fire should support that depth without making it the front door.
+
+Use this hierarchy for database work:
+
+1. Social evidence: posts, comments, saves, authors, and image result groups.
+2. Visual evidence: color, surface, opacity, defects, photo presence, and image annotations.
+3. Ceramic context: glaze, clay body, firing, kiln, cone, atmosphere, and application.
+4. Recipe context: studio formula, commercial supplier glaze, recipe version, and recipe privacy.
+5. Analytical context: materials, oxides, UMF region, expansion risk, firing curve, and confidence.
+
+Search results should explain why a result matches and how complete the evidence is. Analytics should surface confidence levels before showing correlations.
+
 ## Audit Checklist
 
 Before changing any UX surface, check:
@@ -114,6 +128,7 @@ Before changing any UX surface, check:
 - Can one image represent multiple pieces, firings, glazes, or clay bodies?
 - Is privacy explicit and enforced at the correct artifact level?
 - Is the language profile-first rather than studio-first?
+- Does Explore preserve the social-first result database model from `docs/glazy-research.md`?
 - Does mobile avoid left/right overflow and unnecessary loading?
 - Are all visible buttons and links purposeful and functional?
 - Does the workflow still fit the brand system in `docs/brand.md`?

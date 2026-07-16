@@ -214,3 +214,38 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(globals, /\.kb-image-annotation/);
   assert.match(globals, /\.kb-add-group-button/);
 });
+
+test("Glazy research informs the social-first glaze result database structure", async () => {
+  const [researchDoc, uxDoc, phasePlan, taxonomy, workspace, globals] = await Promise.all([
+    readFile(new URL("../docs/glazy-research.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/ux-psychographics.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/phase-plan.md", import.meta.url), "utf8"),
+    readFile(new URL("../lib/glaze-result-taxonomy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(researchDoc, /Glazy Review And Flux And Fire Structure/);
+  assert.match(researchDoc, /social first and glaze-results focused/i);
+  assert.match(researchDoc, /Image result groups/);
+  assert.match(researchDoc, /UMF/);
+  assert.match(researchDoc, /https:\/\/glazy\.org\/search\?base_type=110/);
+  assert.match(uxDoc, /Searchable Result Database Conclusions/);
+  assert.match(uxDoc, /Social evidence/);
+  assert.match(phasePlan, /authorized image result-group queries/);
+
+  assert.match(taxonomy, /GLAZE_RESULT_SEARCH_FACETS/);
+  assert.match(taxonomy, /Evidence quality/);
+  assert.match(taxonomy, /FIRING_DETAIL_LEVELS/);
+  assert.match(taxonomy, /FLUX_FIRE_GLAZY_REVIEW_PRINCIPLES/);
+
+  assert.match(workspace, /function GlazeResultDatabaseStructure/);
+  assert.match(workspace, /Social posts that can deepen into searchable glaze evidence/);
+  assert.match(workspace, /GLAZE_RESULT_SEARCH_FACETS/);
+  assert.match(workspace, /FIRING_DETAIL_LEVELS/);
+
+  assert.match(globals, /\.kb-result-database-panel/);
+  assert.match(globals, /\.kb-result-facet-grid/);
+  assert.match(globals, /\.kb-result-structure-grid/);
+  assert.match(globals, /\.kb-detail-ladder/);
+});
