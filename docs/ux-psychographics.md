@@ -79,6 +79,13 @@ Unknown data is valid data. Use "unknown", "unrecorded", or empty optional field
 - Success: can add a purchased glaze from a common catalog, then tag results by clay and firing.
 - Guardrails: support supplier glaze profiles alongside studio recipes.
 
+### Glaze Seller
+
+- Motivation: share credible glaze results and sell recipes, dry mixes, sample tiles, wet glaze, or consulting globally.
+- Anxiety: seller tools will feel like generic storefront software or expose private formulas.
+- Success: can list a glaze from a public profile while keeping recipe visibility separate.
+- Guardrails: listings must connect to real glaze profiles, result evidence, safety disclosures, seller links, and profile identity.
+
 ### Mobile-First Casual Poster
 
 - Motivation: share or save what just came out of the kiln from a phone.
@@ -115,6 +122,7 @@ Use this hierarchy for database work:
 3. Ceramic context: glaze, clay body, firing, kiln, cone, atmosphere, and application.
 4. Recipe context: studio formula, commercial supplier glaze, recipe version, and recipe privacy.
 5. Analytical context: materials, oxides, UMF region, expansion risk, firing curve, and confidence.
+6. Marketplace context: seller profile, sale format, price label, shop link, shipping region, safety disclosure, and inventory status.
 
 Search results should explain why a result matches and how complete the evidence is. Analytics should surface confidence levels before showing correlations.
 
@@ -129,6 +137,7 @@ Before changing any UX surface, check:
 - Is privacy explicit and enforced at the correct artifact level?
 - Is the language profile-first rather than studio-first?
 - Does Explore preserve the social-first result database model from `docs/glazy-research.md`?
+- Do marketplace listings stay attached to real glaze profiles and avoid exposing private recipe versions?
 - Does mobile avoid left/right overflow and unnecessary loading?
 - Are all visible buttons and links purposeful and functional?
 - Does the workflow still fit the brand system in `docs/brand.md`?

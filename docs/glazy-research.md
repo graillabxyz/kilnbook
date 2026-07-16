@@ -95,6 +95,7 @@ Flux and Fire should be social first and glaze-results focused:
 - The home feed is for conversation, discoveries, kiln openings, test tiles, questions, and progress.
 - The core evidence unit is an image result group: a portion of an image that can connect to a firing, glaze, clay body, kiln, recipe version, application method, and notes.
 - The search database grows from public and authorized result groups, not from disconnected sample records.
+- The global marketplace grows from public glaze profiles and seller profiles, not disconnected product ads.
 - Recipe privacy belongs to the recipe version, while posts and image result groups have their own visibility.
 - Public search should show only fields the viewer is allowed to see.
 - Analytics should explain confidence and correlation, not imply causation from weak evidence.
@@ -108,6 +109,8 @@ Social feed with posts, image result groups, comments, saves, shares, and lightw
 ### Explore
 
 Searchable result database organized around public or authorized result groups. Primary filters should include image/photo presence, glaze, clay body, cone, atmosphere, kiln type, color, surface, opacity, defects, author, and social activity. Advanced filters can include materials, oxides, UMF zones, expansion risk, application method, and firing detail level.
+
+Explore should also include a global glaze marketplace surface for public sellable glaze profiles. Listings can represent digital recipes, dry mixes, wet glazes, sample tiles, or consultations. Seller links, safety disclosures, and recipe privacy must stay distinct.
 
 ### Result Detail
 
@@ -169,6 +172,7 @@ The database should continue moving toward these durable entities:
 - `reviews`
 - `bookmarks`
 - `collections`
+- `glaze marketplace metadata`
 - `analytics_snapshots`
 
 The app should never require all of these entities to exist before posting. The structure should allow a post to begin as a social image and become more analytical over time.

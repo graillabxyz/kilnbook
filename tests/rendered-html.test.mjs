@@ -249,3 +249,42 @@ test("Glazy research informs the social-first glaze result database structure", 
   assert.match(globals, /\.kb-result-structure-grid/);
   assert.match(globals, /\.kb-detail-ladder/);
 });
+
+test("global glaze marketplace stays attached to profiles and glaze records", async () => {
+  const [domain, repository, workspace, globals, seedData, migration, marketplaceDoc, uxDoc] = await Promise.all([
+    readFile(new URL("../lib/domain.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/services/kilnbook-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/seed-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/0005_global_glaze_marketplace.sql", import.meta.url), "utf8"),
+    readFile(new URL("../docs/global-glaze-marketplace.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/ux-psychographics.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(domain, /GlazeMarketplaceListing/);
+  assert.match(domain, /GlazeSaleFormat/);
+  assert.match(domain, /marketplaceListing\?: GlazeMarketplaceListing/);
+  assert.match(domain, /marketplaceEnabled\?: boolean/);
+
+  assert.match(repository, /mapBusinessProfile/);
+  assert.match(repository, /marketplace_enabled/);
+  assert.match(repository, /marketplaceListing/);
+
+  assert.match(workspace, /Global glaze marketplace/);
+  assert.match(workspace, /GlazeMarketplaceCard/);
+  assert.match(workspace, /List this glaze on the global marketplace/);
+  assert.match(workspace, /marketplace_formats/);
+  assert.match(globals, /\.kb-marketplace-grid/);
+  assert.match(globals, /\.kb-commerce-badge/);
+
+  assert.match(seedData, /marketplaceListing/);
+  assert.match(seedData, /shipsGlobally: true/);
+  assert.match(migration, /marketplace_enabled/);
+  assert.match(migration, /glazes_marketplace_public_idx/);
+  assert.match(migration, /glaze_marketplace_listing/);
+
+  assert.match(marketplaceDoc, /Global Glaze Marketplace/);
+  assert.match(marketplaceDoc, /digital recipe, dry mix, wet glaze, sample tile, or consultation/);
+  assert.match(uxDoc, /Glaze Seller/);
+});

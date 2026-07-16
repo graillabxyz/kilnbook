@@ -13,6 +13,7 @@ erDiagram
   firings ||--o{ firing_log_points : records
   firings ||--o{ firing_environment_records : captures
   glazes ||--o{ glaze_recipe_versions : versions
+  profiles ||--o{ glazes : sells
   glaze_recipe_versions ||--o{ glaze_recipe_ingredients : contains
   clay_bodies ||--o{ clay_body_recipe_versions : versions
   firings ||--o{ glaze_applications : produces
@@ -39,4 +40,4 @@ Key integrity rules:
 - Images are canonical storage metadata and use join tables for structured tags.
 - Posts link to canonical records and may store only lightweight historical preview snapshots.
 - Private recipe and firing data is filtered by RLS, not hidden only in the browser.
-
+- Marketplace listings attach to glaze profiles so seller context, result history, recipe privacy, and safety disclosures remain connected.

@@ -3,6 +3,7 @@ import { BRAND_COLORS, BRAND_PROFILE_COLORS } from "../brand";
 import type {
   AuthProvider,
   AtmosphereType,
+  BusinessProfile,
   CeramicImage,
   ClayBodyProfile,
   ConversationPreview,
@@ -11,10 +12,12 @@ import type {
   FiringRecord,
   FiringSegment,
   FiringType,
+  GlazeInventoryStatus,
   GlazeApplication,
   GlazeApplicationLayer,
   GlazeProfile,
   GlazeRecipeVersion,
+  GlazeSaleFormat,
   KilnLocation,
   KilnProfile,
   Post,
@@ -102,6 +105,10 @@ function numberValue(value: unknown, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function booleanValue(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function focalPointValue(value: unknown): CeramicImage["focalPoint"] {
   if (typeof value !== "object" || value === null) return { x: 0.5, y: 0.5 };
   const point = value as { x?: unknown; y?: unknown };
@@ -133,6 +140,31 @@ function hashColor(seed: unknown, palette: readonly string[] = BRAND_PROFILE_COL
   return palette[total % palette.length] ?? BRAND_COLORS.terracotta;
 }
 
+function mapBusinessProfile(row: Row): BusinessProfile {
+  return {
+    businessName: text(row.business_name, "Ceramic business"),
+    logoUrl: optionalText(row.logo_url),
+    description: text(row.description),
+    websiteUrl: optionalText(row.website_url),
+    instagram: optionalText(row.instagram),
+    etsy: optionalText(row.etsy),
+    shopify: optionalText(row.shopify),
+    facebook: optionalText(row.facebook),
+    youtube: optionalText(row.youtube),
+    googleMapsUrl: optionalText(row.google_maps_url),
+    businessHours: optionalText(row.business_hours),
+    contactEmail: optionalText(row.contact_email),
+    contactPhone: optionalText(row.contact_phone),
+    publicStudioAddress: optionalText(row.public_studio_address),
+    servicesOffered: arrayValue(row.services_offered),
+    portfolioHeroImageColor: optionalText(row.portfolio_hero_image_color),
+    marketplaceEnabled: booleanValue(row.marketplace_enabled),
+    sellerLocation: optionalText(row.seller_location),
+    shipsGlobally: booleanValue(row.ships_globally),
+    shopPolicies: optionalText(row.shop_policies),
+  };
+}
+
 function mapProfile(row: Row, authDetails?: Row): Profile {
   return {
     id: text(row.id),
@@ -160,6 +192,7 @@ function mapProfile(row: Row, authDetails?: Row): Profile {
 }
 
 function mapGlaze(row: Row): GlazeProfile {
+  const marketplaceEnabled = booleanValue(row.marketplace_enabled);
   return {
     id: text(row.id),
     ownerId: text(row.owner_id),
@@ -185,6 +218,19 @@ function mapGlaze(row: Row): GlazeProfile {
       BRAND_COLORS.stone,
     ]),
     currentRecipeVersionId: "",
+    marketplaceListing: marketplaceEnabled
+      ? {
+          enabled: true,
+          formats: arrayValue(row.marketplace_formats) as GlazeSaleFormat[],
+          priceLabel: optionalText(row.marketplace_price_label),
+          shopUrl: optionalText(row.marketplace_shop_url),
+          shipsFrom: optionalText(row.marketplace_ships_from),
+          shipsGlobally: booleanValue(row.marketplace_ships_globally),
+          fulfillmentNotes: optionalText(row.marketplace_fulfillment_notes),
+          safetyDisclosure: optionalText(row.marketplace_safety_disclosure),
+          inventoryStatus: text(row.marketplace_inventory_status, "made_to_order") as GlazeInventoryStatus,
+        }
+      : undefined,
   };
 }
 
@@ -416,6 +462,7 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
       const [
         profileRows,
         profileAuthRows,
+        businessRows,
         kilnRows,
         clayRows,
         glazeRows,
@@ -433,6 +480,7 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
       ] = await Promise.all([
         readTable<Row>(supabase.from("profiles").select("*").eq("visibility", "public").order("created_at")),
         readTable<Row>(supabase.from("profile_auth_details").select("profile_id,email,auth_provider,auth_provider_id,email_verified")),
+        readTable<Row>(supabase.from("business_profiles").select("*")),
         readTable<Row>(supabase.from("kilns").select("*").eq("visibility", "public").order("created_at")),
         readTable<Row>(supabase.from("clay_bodies").select("*").eq("profile_visibility", "public").order("created_at")),
         readTable<Row>(supabase.from("glazes").select("*").eq("profile_visibility", "public").order("created_at")),
@@ -450,7 +498,11 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
       ]);
 
       const profileAuthById = new Map(profileAuthRows.map((row) => [text(row.profile_id), row]));
-      const profiles = profileRows.map((profile) => mapProfile(profile, profileAuthById.get(text(profile.id))));
+      const businessByProfileId = new Map(businessRows.map((row) => [text(row.profile_id), mapBusinessProfile(row)]));
+      const profiles = profileRows.map((profile) => ({
+        ...mapProfile(profile, profileAuthById.get(text(profile.id))),
+        businessProfile: businessByProfileId.get(text(profile.id)),
+      }));
       const profilesById = createRecordMap(profiles);
       const linkedGlazeIds = groupIds(postGlazeRows, "glaze_id");
       const linkedClayIds = groupIds(postClayRows, "clay_body_id");

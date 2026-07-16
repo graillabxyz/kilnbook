@@ -1576,6 +1576,12 @@ button:disabled {
   background: #e8efdf;
 }
 
+.kb-chip.global {
+  color: var(--kb-cobalt);
+  border-color: rgba(49, 93, 103, 0.28);
+  background: var(--kb-cobalt-soft);
+}
+
 .kb-chip.action,
 .kb-chip.removable {
   min-height: 1.9rem;
@@ -1894,6 +1900,95 @@ button:disabled {
 
 .kb-result-structure-card small {
   color: var(--kb-muted);
+}
+
+.kb-marketplace-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.kb-marketplace-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kb-marketplace-card,
+.kb-marketplace-inline,
+.kb-marketplace-builder {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.68);
+  padding: 0.75rem;
+}
+
+.kb-marketplace-card {
+  grid-template-rows: auto 1fr;
+}
+
+.kb-marketplace-card.compact {
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.kb-marketplace-card .kb-hero-swatch {
+  min-height: 6.2rem;
+}
+
+.kb-marketplace-card-body {
+  min-width: 0;
+  display: grid;
+  gap: 0.52rem;
+}
+
+.kb-marketplace-card h3,
+.kb-marketplace-card p {
+  margin: 0;
+}
+
+.kb-marketplace-card .kb-module-head span,
+.kb-marketplace-meta,
+.kb-marketplace-card small,
+.kb-marketplace-inline small {
+  color: var(--kb-muted);
+}
+
+.kb-marketplace-card .kb-module-head h3 {
+  margin-top: 0.08rem;
+}
+
+.kb-marketplace-meta {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.kb-marketplace-inline {
+  background:
+    linear-gradient(135deg, rgba(227, 238, 240, 0.54), rgba(255, 248, 239, 0.72)),
+    var(--kb-surface-strong);
+}
+
+.kb-marketplace-inline .kb-quiet-button,
+.kb-marketplace-card .kb-primary-button {
+  justify-self: start;
+}
+
+.kb-commerce-badge {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.72rem;
+  border-radius: 999px;
+  border: 1px solid rgba(101, 123, 84, 0.28);
+  background: #e8efdf;
+  color: #4a5d3d;
+  padding: 0 0.58rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .kb-library-grid > button {
@@ -3144,6 +3239,8 @@ button:disabled {
   .kb-result-structure-split,
   .kb-result-structure-grid,
   .kb-database-lede,
+  .kb-marketplace-grid,
+  .kb-marketplace-grid.compact,
   .kb-composer-grid,
   .kb-compose-controls,
   .kb-profile-hierarchy,

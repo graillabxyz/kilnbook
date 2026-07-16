@@ -31,10 +31,12 @@ Implemented in this scaffold:
 - Public glaze, clay-body, firing, and result database pages backed by authorized image result-group queries.
 - Explore search facets for social signal, visual result, ceramic context, recipe source, chemistry, and evidence quality.
 - Result detail pages that start from the post story and unfold into image annotations, glaze profiles, clay bodies, firing records, comments, and privacy-aware public previews.
+- Global glaze marketplace listings attached to public glaze profiles and seller profiles, with external shop links before in-app checkout.
 
 ## Phase 4: Paid Analytics
 
 - Stripe subscriptions.
+- Stripe Connect or equivalent seller payout flow for in-app glaze marketplace checkout.
 - Saved dashboards.
 - Advanced correlations and exports.
 - Studio roles, approvals, audit history, and shared libraries.

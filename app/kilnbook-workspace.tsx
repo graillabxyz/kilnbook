@@ -59,12 +59,16 @@ import { z } from "zod";
 import { BRAND_ASSETS, BRAND_CHART_COLORS, BRAND_COLORS } from "@/lib/brand";
 import type {
   AtmosphereType,
+  BusinessProfile,
   ClayBodyProfile,
   FiringEnvironmentRecord,
   FiringRecord,
   FiringType,
+  GlazeInventoryStatus,
+  GlazeMarketplaceListing,
   GlazeRecipeVersion,
   GlazeProfile,
+  GlazeSaleFormat,
   KilnLocation,
   KilnProfile,
   Post,
@@ -211,6 +215,10 @@ type KilnCatalogEntry = {
   powerKw?: number;
   notes: string;
 };
+type GlazeMarketplacePreset = {
+  format: GlazeSaleFormat;
+  label: string;
+};
 
 type MobileNavItem =
   | { label: "Home" | "Explore" | "Profile"; view: View; icon: LucideIcon }
@@ -260,6 +268,13 @@ const PROFILE_SWATCHES = [
   BRAND_COLORS.moss,
   BRAND_COLORS.stone,
   BRAND_COLORS.iron,
+];
+const GLAZE_MARKETPLACE_FORMATS: GlazeMarketplacePreset[] = [
+  { format: "digital_recipe", label: "Digital recipe" },
+  { format: "dry_mix", label: "Dry mix" },
+  { format: "wet_glaze", label: "Wet glaze" },
+  { format: "sample_tile", label: "Sample tile" },
+  { format: "consultation", label: "Consultation" },
 ];
 const GLAZE_SUPPLIER_CATALOG: SupplierGlazeCatalogEntry[] = [
   {
@@ -512,6 +527,13 @@ function atmosphereValuesFromForm(form: HTMLFormElement) {
   );
 }
 
+function marketplaceFormatsFromForm(form: HTMLFormElement) {
+  const values = new FormData(form).getAll("marketplaceFormat");
+  return values.filter((value): value is GlazeSaleFormat =>
+    GLAZE_MARKETPLACE_FORMATS.some((option) => option.format === value),
+  );
+}
+
 function recipeFingerprint(ingredients: RecipeIngredient[]) {
   if (ingredients.length === 0) return `commercial-${Date.now()}`;
   return ingredients
@@ -560,6 +582,15 @@ async function persistGlazeRecord(record: CreatedGlazeRecord) {
     profile_visibility: profile.profileVisibility,
     description: profile.description,
     application_notes: profile.applicationNotes,
+    marketplace_enabled: profile.marketplaceListing?.enabled ?? false,
+    marketplace_formats: profile.marketplaceListing?.formats ?? [],
+    marketplace_price_label: profile.marketplaceListing?.priceLabel,
+    marketplace_shop_url: profile.marketplaceListing?.shopUrl,
+    marketplace_ships_from: profile.marketplaceListing?.shipsFrom,
+    marketplace_ships_globally: profile.marketplaceListing?.shipsGlobally ?? false,
+    marketplace_fulfillment_notes: profile.marketplaceListing?.fulfillmentNotes,
+    marketplace_safety_disclosure: profile.marketplaceListing?.safetyDisclosure,
+    marketplace_inventory_status: profile.marketplaceListing?.inventoryStatus ?? "not_listed",
   });
   if (glazeError) throw glazeError;
 
@@ -1589,6 +1620,7 @@ export function KilnbookWorkspace({
             <ProfileScreen
               viewer={viewer}
               authStatus={authStatus}
+              glazes={glazes}
               posts={snapshot.posts}
               drafts={addDrafts}
               onOpenSettings={() => setView("Settings")}
@@ -4552,6 +4584,24 @@ function GlazesScreen({
                   <span className="kb-chip" key={color}>{color}</span>
                 ))}
               </div>
+              {glaze.marketplaceListing?.enabled && (
+                <div className="kb-marketplace-inline">
+                  <span className="kb-commerce-badge">For sale</span>
+                  <strong>{glaze.marketplaceListing.priceLabel ?? "Seller sets price"}</strong>
+                  <small>
+                    {glaze.marketplaceListing.shipsGlobally
+                      ? "Available globally"
+                      : glaze.marketplaceListing.shipsFrom
+                        ? `Ships from ${glaze.marketplaceListing.shipsFrom}`
+                        : "Shipping set by seller"}
+                  </small>
+                  {glaze.marketplaceListing.shopUrl && (
+                    <a className="kb-quiet-button" href={normalizePublicUrl(glaze.marketplaceListing.shopUrl)}>
+                      View listing
+                    </a>
+                  )}
+                </div>
+              )}
             </section>
             <section className="kb-panel">
               <div className="kb-section-title compact">
@@ -4678,6 +4728,54 @@ function GlazeResultDatabaseStructure() {
         </div>
       </div>
     </section>
+  );
+}
+
+function GlazeMarketplaceCard({
+  glaze,
+  seller,
+  compact = false,
+}: {
+  glaze: GlazeProfile;
+  seller?: Profile;
+  compact?: boolean;
+}) {
+  const listing = glaze.marketplaceListing;
+  if (!listing?.enabled) return null;
+  const business = seller?.businessProfile;
+  const shopUrl = getMarketplaceShopUrl(listing, business, seller);
+  const sellerName = business?.businessName ?? seller?.displayName ?? glaze.creatorAttribution;
+  return (
+    <article className={compact ? "kb-marketplace-card compact" : "kb-marketplace-card"}>
+      <div className="kb-hero-swatch" style={{ background: glaze.heroImageColor }} />
+      <div className="kb-marketplace-card-body">
+        <div className="kb-module-head">
+          <div>
+            <span>{sellerName}</span>
+            <h3>{glaze.name}</h3>
+          </div>
+          <span className="kb-commerce-badge">{listing.inventoryStatus.replaceAll("_", " ")}</span>
+        </div>
+        <p>{glaze.description}</p>
+        <div className="kb-chip-row">
+          {listing.formats.map((format) => (
+            <span className="kb-chip" key={format}>{formatGlazeSaleFormat(format)}</span>
+          ))}
+          <span className="kb-chip">{glaze.coneRange}</span>
+          {listing.shipsGlobally && <span className="kb-chip global">Global</span>}
+        </div>
+        <div className="kb-marketplace-meta">
+          <span>{listing.priceLabel ?? "Seller sets price"}</span>
+          <span>{listing.shipsFrom ? `Ships from ${listing.shipsFrom}` : "Shipping set by seller"}</span>
+        </div>
+        {listing.safetyDisclosure && <small>{listing.safetyDisclosure}</small>}
+        {shopUrl && (
+          <a className="kb-primary-button" href={shopUrl}>
+            View listing
+          </a>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -4907,6 +5005,14 @@ function GlazeCreateDialog({
   const [heroImageColor, setHeroImageColor] = useState<string>(BRAND_COLORS.sun);
   const [recipeVisibility, setRecipeVisibility] = useState<AddVisibility>("public");
   const [profileVisibility, setProfileVisibility] = useState<AddVisibility>("public");
+  const [marketplaceEnabled, setMarketplaceEnabled] = useState(false);
+  const [marketplacePriceLabel, setMarketplacePriceLabel] = useState("");
+  const [marketplaceShopUrl, setMarketplaceShopUrl] = useState(getDefaultMarketplaceShopUrl(viewer));
+  const [marketplaceShipsFrom, setMarketplaceShipsFrom] = useState(viewer.businessProfile?.sellerLocation ?? viewer.locationLabel ?? "");
+  const [marketplaceShipsGlobally, setMarketplaceShipsGlobally] = useState(Boolean(viewer.businessProfile?.shipsGlobally));
+  const [marketplaceInventoryStatus, setMarketplaceInventoryStatus] = useState<GlazeInventoryStatus>("made_to_order");
+  const [marketplaceFulfillmentNotes, setMarketplaceFulfillmentNotes] = useState("");
+  const [marketplaceSafetyDisclosure, setMarketplaceSafetyDisclosure] = useState("");
   const [ingredients, setIngredients] = useState<GlazeIngredientDraft[]>([
     { id: "ingredient-feldspar", materialName: "Custer Feldspar", percentage: "40", role: "base" },
     { id: "ingredient-silica", materialName: "Silica 325 mesh", percentage: "25", role: "base" },
@@ -4964,6 +5070,7 @@ function GlazeCreateDialog({
     const profileId = createClientRecordId("glaze");
     const recipeId = createClientRecordId("recipe");
     const atmospheres = atmosphereValuesFromForm(event.currentTarget);
+    const marketplaceFormats = marketplaceFormatsFromForm(event.currentTarget);
     const recipeIngredients: RecipeIngredient[] =
       mode === "recipe"
         ? parsedIngredients.map((ingredient, index) => ({
@@ -4999,6 +5106,19 @@ function GlazeCreateDialog({
       applicationNotes: applicationNotes.trim() || "Record application thickness, coat count, and firing results.",
       heroImageColor,
       currentRecipeVersionId: recipeId,
+      marketplaceListing: marketplaceEnabled
+        ? {
+            enabled: true,
+            formats: marketplaceFormats.length > 0 ? marketplaceFormats : ["digital_recipe"],
+            priceLabel: marketplacePriceLabel.trim() || undefined,
+            shopUrl: marketplaceShopUrl.trim() || undefined,
+            shipsFrom: marketplaceShipsFrom.trim() || undefined,
+            shipsGlobally: marketplaceShipsGlobally,
+            fulfillmentNotes: marketplaceFulfillmentNotes.trim() || undefined,
+            safetyDisclosure: marketplaceSafetyDisclosure.trim() || "Seller is responsible for accurate safety, food-safety, and shipping disclosures.",
+            inventoryStatus: marketplaceInventoryStatus,
+          }
+        : undefined,
     };
     const recipeVersion: GlazeRecipeVersion = {
       id: recipeId,
@@ -5224,6 +5344,109 @@ function GlazeCreateDialog({
                 <ChevronDown size={16} aria-hidden="true" />
               </span>
             </label>
+          </div>
+          <div className="kb-marketplace-builder">
+            <label className="kb-checkbox-row standalone">
+              <input
+                type="checkbox"
+                checked={marketplaceEnabled}
+                onChange={(event) => setMarketplaceEnabled(event.target.checked)}
+              />
+              <span>List this glaze on the global marketplace</span>
+            </label>
+            {marketplaceEnabled && (
+              <>
+                <div className="kb-module-head">
+                  <div>
+                    <p className="kb-kicker">Marketplace</p>
+                    <strong>Sell from your public profile</strong>
+                  </div>
+                  <span>{marketplaceShipsGlobally ? "Global shipping" : "Regional listing"}</span>
+                </div>
+                <div className="kb-checkbox-grid">
+                  {GLAZE_MARKETPLACE_FORMATS.map((option) => (
+                    <label className="kb-checkbox-row" key={option.format}>
+                      <input
+                        type="checkbox"
+                        name="marketplaceFormat"
+                        value={option.format}
+                        defaultChecked={option.format === "digital_recipe" || option.format === "dry_mix"}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="kb-form-grid three">
+                  <label>
+                    <span>Price label</span>
+                    <input
+                      value={marketplacePriceLabel}
+                      onChange={(event) => setMarketplacePriceLabel(event.target.value)}
+                      placeholder="$24 dry mix / $12 recipe"
+                    />
+                  </label>
+                  <label>
+                    <span>Shop URL</span>
+                    <input
+                      value={marketplaceShopUrl}
+                      onChange={(event) => setMarketplaceShopUrl(event.target.value)}
+                      placeholder="https://..."
+                    />
+                  </label>
+                  <label>
+                    <span>Inventory</span>
+                    <span className="kb-select-wrap">
+                      <select
+                        value={marketplaceInventoryStatus}
+                        onChange={(event) => setMarketplaceInventoryStatus(event.target.value as GlazeInventoryStatus)}
+                      >
+                        <option value="in_stock">In stock</option>
+                        <option value="made_to_order">Made to order</option>
+                        <option value="limited">Limited</option>
+                        <option value="sold_out">Sold out</option>
+                      </select>
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </span>
+                  </label>
+                </div>
+                <div className="kb-form-grid">
+                  <label>
+                    <span>Ships from</span>
+                    <input
+                      value={marketplaceShipsFrom}
+                      onChange={(event) => setMarketplaceShipsFrom(event.target.value)}
+                      placeholder="Portland, OR"
+                    />
+                  </label>
+                  <label className="kb-checkbox-row standalone">
+                    <input
+                      type="checkbox"
+                      checked={marketplaceShipsGlobally}
+                      onChange={(event) => setMarketplaceShipsGlobally(event.target.checked)}
+                    />
+                    <span>Available globally</span>
+                  </label>
+                </div>
+                <div className="kb-form-grid">
+                  <label>
+                    <span>Fulfillment notes</span>
+                    <textarea
+                      value={marketplaceFulfillmentNotes}
+                      onChange={(event) => setMarketplaceFulfillmentNotes(event.target.value)}
+                      placeholder="Batch windows, shipping regions, lead times, pickup options"
+                    />
+                  </label>
+                  <label>
+                    <span>Safety disclosure</span>
+                    <textarea
+                      value={marketplaceSafetyDisclosure}
+                      onChange={(event) => setMarketplaceSafetyDisclosure(event.target.value)}
+                      placeholder="Food-safety status, handling notes, legal or shipping limitations"
+                    />
+                  </label>
+                </div>
+              </>
+            )}
           </div>
           <div className="kb-swatch-picker" aria-label="Profile swatch color">
             {PROFILE_SWATCHES.map((color) => (
@@ -5704,11 +5927,44 @@ function ExploreScreen({
       glaze.name.toLowerCase().includes(normalizedQuery) ||
       glaze.surface.toLowerCase().includes(normalizedQuery),
   );
+  const sellerById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const marketplaceGlazes = visibleGlazes.filter((glaze) => glaze.marketplaceListing?.enabled);
   const businessProfiles = profiles.filter((profile) => profile.subscriptionTier === "business");
 
   return (
     <div className="kb-stack">
       <GlazeResultDatabaseStructure />
+      <section className="kb-panel">
+        <div className="kb-section-title">
+          <div>
+            <p className="kb-kicker">Global glaze marketplace</p>
+            <h2>Discover glazes from formulators and sellers worldwide</h2>
+          </div>
+          <div className="kb-chip-row">
+            <span className="kb-chip">Recipes</span>
+            <span className="kb-chip">Dry mixes</span>
+            <span className="kb-chip">Sample tiles</span>
+            <span className="kb-chip global">Global sellers</span>
+          </div>
+        </div>
+        {marketplaceGlazes.length > 0 ? (
+          <div className="kb-marketplace-grid">
+            {marketplaceGlazes.map((glaze) => (
+              <GlazeMarketplaceCard
+                glaze={glaze}
+                seller={sellerById.get(glaze.ownerId)}
+                key={glaze.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="kb-empty-state compact">
+            <Layers3 size={24} aria-hidden="true" />
+            <strong>No marketplace listings match this search</strong>
+            <p>Public glaze profiles can be listed as recipes, dry mixes, sample tiles, wet glazes, or consultations.</p>
+          </div>
+        )}
+      </section>
       <section className="kb-panel">
         <div className="kb-section-title">
           <div>
@@ -6134,6 +6390,7 @@ function AuthGate({
 function ProfileScreen({
   viewer,
   authStatus,
+  glazes,
   posts,
   drafts,
   onOpenSettings,
@@ -6141,6 +6398,7 @@ function ProfileScreen({
 }: {
   viewer: Profile;
   authStatus: AuthStatus;
+  glazes: GlazeProfile[];
   posts: Post[];
   drafts: AddDraft[];
   onOpenSettings: () => void;
@@ -6165,6 +6423,9 @@ function ProfileScreen({
     { label: "Specialties", value: String(Math.max(viewer.specialties.length, 1)) },
     { label: "Plan", value: formatPlanLabel(viewer.subscriptionTier) },
   ];
+  const listedGlazes = glazes.filter(
+    (glaze) => glaze.ownerId === viewer.id && glaze.marketplaceListing?.enabled,
+  );
   const publicLinks = [
     viewer.website ? { label: "Website", url: normalizePublicUrl(viewer.website) } : null,
     business?.websiteUrl ? { label: "Business", url: normalizePublicUrl(business.websiteUrl) } : null,
@@ -6237,6 +6498,24 @@ function ProfileScreen({
             <div className="kb-chip-row">
               {business.servicesOffered.map((service) => (
                 <span className="kb-chip" key={service}>{service}</span>
+              ))}
+            </div>
+          </section>
+        )}
+        {listedGlazes.length > 0 && (
+          <section className="kb-profile-section">
+            <div className="kb-section-title compact">
+              <h3>Glaze shop</h3>
+              <span>{business?.shipsGlobally || listedGlazes.some((glaze) => glaze.marketplaceListing?.shipsGlobally) ? "Global seller" : "Seller profile"}</span>
+            </div>
+            <div className="kb-marketplace-grid compact">
+              {listedGlazes.map((glaze) => (
+                <GlazeMarketplaceCard
+                  glaze={glaze}
+                  seller={viewer}
+                  key={glaze.id}
+                  compact
+                />
               ))}
             </div>
           </section>
@@ -6709,6 +6988,35 @@ function normalizePublicUrl(value: string, host?: string): string {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   const path = trimmed.replace(/^@/, "").replace(/^\/+/, "");
   return host ? `https://${host}/${path}` : `https://${path}`;
+}
+
+function getMarketplaceShopUrl(
+  listing: GlazeMarketplaceListing,
+  business?: BusinessProfile,
+  seller?: Profile,
+): string | undefined {
+  if (listing.shopUrl) return normalizePublicUrl(listing.shopUrl);
+  if (business?.shopify) return normalizePublicUrl(business.shopify);
+  if (business?.websiteUrl) return normalizePublicUrl(business.websiteUrl);
+  if (seller?.website) return normalizePublicUrl(seller.website);
+  if (business?.etsy) return normalizePublicUrl(business.etsy, "etsy.com/shop");
+  return undefined;
+}
+
+function getDefaultMarketplaceShopUrl(profile: Profile): string {
+  const business = profile.businessProfile;
+  if (business?.shopify) return normalizePublicUrl(business.shopify);
+  if (business?.websiteUrl) return normalizePublicUrl(business.websiteUrl);
+  if (profile.website) return normalizePublicUrl(profile.website);
+  if (business?.etsy) return normalizePublicUrl(business.etsy, "etsy.com/shop");
+  return "";
+}
+
+function formatGlazeSaleFormat(format: GlazeSaleFormat) {
+  return format
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function formatProfileType(profileType: Profile["profileType"]) {

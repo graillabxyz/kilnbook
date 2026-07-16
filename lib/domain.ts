@@ -32,6 +32,36 @@ export interface BusinessProfile {
   publicStudioAddress?: string;
   servicesOffered: string[];
   portfolioHeroImageColor?: string;
+  marketplaceEnabled?: boolean;
+  sellerLocation?: string;
+  shipsGlobally?: boolean;
+  shopPolicies?: string;
+}
+
+export type GlazeSaleFormat =
+  | "digital_recipe"
+  | "dry_mix"
+  | "wet_glaze"
+  | "sample_tile"
+  | "consultation";
+
+export type GlazeInventoryStatus =
+  | "not_listed"
+  | "in_stock"
+  | "made_to_order"
+  | "limited"
+  | "sold_out";
+
+export interface GlazeMarketplaceListing {
+  enabled: boolean;
+  formats: GlazeSaleFormat[];
+  priceLabel?: string;
+  shopUrl?: string;
+  shipsFrom?: string;
+  shipsGlobally?: boolean;
+  fulfillmentNotes?: string;
+  safetyDisclosure?: string;
+  inventoryStatus: GlazeInventoryStatus;
 }
 
 export type TemperatureUnit = "c" | "f";
@@ -221,6 +251,7 @@ export interface GlazeProfile {
   applicationNotes: string;
   heroImageColor: string;
   currentRecipeVersionId: ID;
+  marketplaceListing?: GlazeMarketplaceListing;
 }
 
 export interface ClayBodyProfile {
