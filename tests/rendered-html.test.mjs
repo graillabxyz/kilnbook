@@ -157,3 +157,29 @@ test("glaze, clay body, and kiln libraries use real creation flows", async () =>
   assert.match(globals, /\.kb-swatch-picker/);
   assert.match(globals, /\.kb-library-select\.active/);
 });
+
+test("messages, profile, and settings use modern social layouts", async () => {
+  const [workspace, globals] = await Promise.all([
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(workspace, /messageFilter/);
+  assert.match(workspace, /Search messages/);
+  assert.match(workspace, /kb-conversation-panel/);
+  assert.match(workspace, /kb-message-thread/);
+  assert.match(workspace, /kb-profile-layout/);
+  assert.match(workspace, /kb-profile-stats/);
+  assert.match(workspace, /kb-settings-layout/);
+  assert.match(workspace, /normalizePublicUrl/);
+  assert.doesNotMatch(workspace, /Conversations with ceramic record links/);
+  assert.doesNotMatch(workspace, /Authentication, units, privacy, and notifications/);
+
+  assert.match(globals, /\.kb-messages-shell/);
+  assert.match(globals, /\.kb-message-filter button\.active/);
+  assert.match(globals, /\.kb-message-compose\.modern/);
+  assert.match(globals, /\.kb-profile-cover/);
+  assert.match(globals, /\.kb-profile-post-row/);
+  assert.match(globals, /\.kb-settings-card-grid/);
+  assert.match(globals, /grid-template-areas:\n    "hero hero"/);
+});

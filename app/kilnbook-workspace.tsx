@@ -5526,8 +5526,21 @@ function MessagesScreen({
   conversations: { id: string; participantName: string; participantUsername: string; unreadCount: number; lastMessage: string; updatedAt: string; linkedRecordLabel?: string }[];
 }) {
   const [selectedConversationId, setSelectedConversationId] = useState(conversations[0]?.id ?? "");
+  const [messageQuery, setMessageQuery] = useState("");
+  const [messageFilter, setMessageFilter] = useState<"all" | "unread">("all");
   const [draft, setDraft] = useState("");
   const [sentMessages, setSentMessages] = useState<Record<string, string[]>>({});
+  const filteredConversations = conversations.filter((conversation) => {
+    const haystack = [
+      conversation.participantName,
+      conversation.participantUsername,
+      conversation.lastMessage,
+      conversation.linkedRecordLabel ?? "",
+    ].join(" ").toLowerCase();
+    const matchesQuery = haystack.includes(messageQuery.trim().toLowerCase());
+    const matchesFilter = messageFilter === "all" || conversation.unreadCount > 0;
+    return matchesQuery && matchesFilter;
+  });
   const selectedConversation =
     conversations.find((conversation) => conversation.id === selectedConversationId) ??
     conversations[0];
@@ -5546,16 +5559,42 @@ function MessagesScreen({
   };
 
   return (
-    <div className="kb-grid-two">
-      <section className="kb-panel">
-        <div className="kb-section-title">
+    <div className="kb-messages-shell">
+      <section className="kb-panel kb-inbox-panel">
+        <div className="kb-inbox-head">
           <div>
             <p className="kb-kicker">Messages</p>
-            <h2>Conversations with ceramic record links</h2>
+            <h2>Inbox</h2>
           </div>
+          <span>{conversations.reduce((total, conversation) => total + conversation.unreadCount, 0)} unread</span>
         </div>
-        <div className="kb-message-list">
-          {conversations.map((conversation) => (
+        <label className="kb-inbox-search">
+          <Search size={17} aria-hidden="true" />
+          <input
+            aria-label="Search messages"
+            value={messageQuery}
+            onChange={(event) => setMessageQuery(event.target.value)}
+            placeholder="Search messages"
+          />
+        </label>
+        <div className="kb-message-filter" aria-label="Message filters">
+          <button
+            type="button"
+            className={messageFilter === "all" ? "active" : ""}
+            onClick={() => setMessageFilter("all")}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className={messageFilter === "unread" ? "active" : ""}
+            onClick={() => setMessageFilter("unread")}
+          >
+            Unread
+          </button>
+        </div>
+        <div className="kb-message-list modern">
+          {filteredConversations.map((conversation) => (
             <button
               type="button"
               key={conversation.id}
@@ -5564,41 +5603,96 @@ function MessagesScreen({
             >
               <div className="kb-avatar">{conversation.participantName.slice(0, 1)}</div>
               <div>
-                <strong>{conversation.participantName}</strong>
+                <span className="kb-message-row-head">
+                  <strong>{conversation.participantName}</strong>
+                  <small>{formatMessageTimestamp(conversation.updatedAt)}</small>
+                </span>
+                <em>@{conversation.participantUsername}</em>
                 <span>{conversation.lastMessage}</span>
                 {conversation.linkedRecordLabel && <small>{conversation.linkedRecordLabel}</small>}
               </div>
               {conversation.unreadCount > 0 && <b>{conversation.unreadCount}</b>}
             </button>
           ))}
+          {filteredConversations.length === 0 && (
+            <div className="kb-empty-state compact">
+              <Inbox size={24} />
+              <strong>No matching messages</strong>
+              <p>Try a different search or show all conversations.</p>
+            </div>
+          )}
         </div>
       </section>
-      <aside className="kb-panel kb-conversation">
-        <div className="kb-section-title compact">
-          <h3>{selectedConversation?.participantName ?? "Conversation"}</h3>
-          <span>Typing indicators and realtime updates use scoped subscriptions.</span>
-        </div>
-        <div className="kb-bubble received">Can you send the curve from the top thermocouple before the next soda load?</div>
-        <div className="kb-bubble sent">Yes. I tagged the wind gusts and damper notes on Firing 042 so the comparison is readable.</div>
-        <div className="kb-bubble received">Perfect. I will link it to the celadon test thread.</div>
-        {selectedMessages.map((message, index) => (
-          <div className="kb-bubble sent" key={`${selectedConversation?.id}-${index}`}>
-            {message}
+      <section className="kb-panel kb-conversation-panel">
+        {selectedConversation ? (
+          <>
+            <header className="kb-chat-head">
+              <div className="kb-chat-person">
+                <div className="kb-avatar online">{selectedConversation.participantName.slice(0, 1)}</div>
+                <div>
+                  <h3>{selectedConversation.participantName}</h3>
+                  <span>@{selectedConversation.participantUsername} · Active recently</span>
+                </div>
+              </div>
+              {selectedConversation.linkedRecordLabel && (
+                <span className="kb-chat-record">
+                  <ShieldCheck size={14} />
+                  {selectedConversation.linkedRecordLabel}
+                </span>
+              )}
+            </header>
+            <div className="kb-message-thread" aria-live="polite">
+              <span className="kb-thread-day">Today</span>
+              <div className="kb-message-cluster received">
+                <div className="kb-avatar">{selectedConversation.participantName.slice(0, 1)}</div>
+                <div>
+                  <div className="kb-bubble received">Can you send the curve from the top thermocouple before the next soda load?</div>
+                  <small>{formatMessageTimestamp(selectedConversation.updatedAt)}</small>
+                </div>
+              </div>
+              <div className="kb-message-cluster sent">
+                <div>
+                  <div className="kb-bubble sent">Yes. I tagged the wind gusts and damper notes on Firing 042 so the comparison is readable.</div>
+                  <small>Sent</small>
+                </div>
+              </div>
+              <div className="kb-message-cluster received">
+                <div className="kb-avatar">{selectedConversation.participantName.slice(0, 1)}</div>
+                <div>
+                  <div className="kb-bubble received">Perfect. I will link it to the celadon test thread.</div>
+                  <small>Read</small>
+                </div>
+              </div>
+              {selectedMessages.map((message, index) => (
+                <div className="kb-message-cluster sent" key={`${selectedConversation.id}-${index}`}>
+                  <div>
+                    <div className="kb-bubble sent">{message}</div>
+                    <small>Just now</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <form className="kb-message-compose modern" onSubmit={sendMessage}>
+              <input
+                aria-label="Message"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={`Message ${selectedConversation.participantName}`}
+              />
+              <button type="submit" className="kb-primary-button" disabled={!draft.trim()}>
+                <Send size={17} />
+                <span>Send</span>
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="kb-empty-state">
+            <MessageCircle size={28} />
+            <strong>Select a conversation</strong>
+            <p>Your messages will appear here when a thread is available.</p>
           </div>
-        ))}
-        <form className="kb-message-compose" onSubmit={sendMessage}>
-          <input
-            aria-label="Message"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={`Message ${selectedConversation?.participantName ?? "profile"}`}
-          />
-          <button type="submit" className="kb-primary-button" disabled={!draft.trim()}>
-            <Send size={17} />
-            <span>Send</span>
-          </button>
-        </form>
-      </aside>
+        )}
+      </section>
     </div>
   );
 }
@@ -5764,10 +5858,23 @@ function ProfileScreen({
 
   const profileIdentity = viewer.identityLabel ?? formatProfileType(viewer.profileType);
   const business = viewer.businessProfile;
+  const profileStats = [
+    { label: "Posts", value: String(posts.length) },
+    { label: "Specialties", value: String(Math.max(viewer.specialties.length, 1)) },
+    { label: "Plan", value: formatPlanLabel(viewer.subscriptionTier) },
+  ];
+  const publicLinks = [
+    viewer.website ? { label: "Website", url: normalizePublicUrl(viewer.website) } : null,
+    business?.websiteUrl ? { label: "Business", url: normalizePublicUrl(business.websiteUrl) } : null,
+    business?.instagram ? { label: "Instagram", url: normalizePublicUrl(business.instagram, "instagram.com") } : null,
+    business?.etsy ? { label: "Etsy", url: normalizePublicUrl(business.etsy, "etsy.com/shop") } : null,
+  ].filter(Boolean) as { label: string; url: string }[];
+
   return (
-    <div className="kb-grid-two">
-      <section className="kb-panel">
-        <div className="kb-profile-head">
+    <div className="kb-profile-layout">
+      <section className="kb-panel kb-profile-main">
+        <div className="kb-profile-cover" style={{ background: business?.portfolioHeroImageColor ?? viewer.avatarColor }} />
+        <div className="kb-profile-identity">
           <div
             className={viewer.avatarUrl ? "kb-avatar large photo" : "kb-avatar large"}
             style={
@@ -5778,92 +5885,133 @@ function ProfileScreen({
           >
             {!viewer.avatarUrl && viewer.displayName.slice(0, 1)}
           </div>
-          <div>
-            <p className="kb-kicker">Public profile</p>
-            <h2>{viewer.displayName}</h2>
-            <span>@{viewer.username}{viewer.locationLabel ? ` · ${viewer.locationLabel}` : ""}</span>
-          </div>
-          {viewer.subscriptionTier === "business" && <BusinessBadge />}
-          <VisibilityPill visibility={viewer.profileVisibility} />
-        </div>
-        <p>{viewer.biography}</p>
-        {business && (
-          <section className="kb-business-profile">
-            <div
-              className="kb-business-hero"
-              style={{ background: business.portfolioHeroImageColor ?? viewer.avatarColor }}
-            />
+          <div className="kb-profile-name">
             <div>
-              <p className="kb-kicker">Business profile</p>
+              <p className="kb-kicker">Public profile</p>
+              <h2>{viewer.displayName}</h2>
+              <span>@{viewer.username}{viewer.locationLabel ? ` · ${viewer.locationLabel}` : ""}</span>
+            </div>
+            <div className="kb-profile-actions">
+              {viewer.subscriptionTier === "business" && <BusinessBadge />}
+              <VisibilityPill visibility={viewer.profileVisibility} />
+              <button type="button" className="kb-quiet-button" onClick={onOpenSettings}>
+                <Settings size={17} />
+                <span>Edit profile</span>
+              </button>
+            </div>
+          </div>
+          <p>{viewer.biography}</p>
+          <div className="kb-profile-stats" aria-label="Profile stats">
+            {profileStats.map((stat) => (
+              <span key={stat.label}>
+                <strong>{stat.value}</strong>
+                <small>{stat.label}</small>
+              </span>
+            ))}
+          </div>
+          <div className="kb-chip-row">
+            <span className="kb-chip record">{profileIdentity}</span>
+            {viewer.specialties.map((specialty) => (
+              <span className="kb-chip" key={specialty}>{specialty}</span>
+            ))}
+          </div>
+          {publicLinks.length > 0 && (
+            <div className="kb-profile-link-row" aria-label="Public links">
+              {publicLinks.map((link) => (
+                <a className="kb-quiet-button" href={link.url} key={link.label}>
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+        {business && (
+          <section className="kb-profile-section">
+            <div className="kb-section-title compact">
               <h3>{business.businessName}</h3>
-              <p>{business.description}</p>
-              <div className="kb-business-actions">
-                {business.websiteUrl && (
-                  <a className="kb-primary-button" href={business.websiteUrl}>
-                    Visit Website
-                  </a>
-                )}
-                {business.googleMapsUrl && (
-                  <a className="kb-quiet-button" href={business.googleMapsUrl}>
-                    Directions
-                  </a>
-                )}
-              </div>
+              <span>Business profile</span>
+            </div>
+            <p>{business.description}</p>
+            <div className="kb-chip-row">
+              {business.servicesOffered.map((service) => (
+                <span className="kb-chip" key={service}>{service}</span>
+              ))}
             </div>
           </section>
         )}
-        <div className="kb-profile-hierarchy" aria-label="Profile hierarchy">
-          <span>
-            <strong>Profile</strong>
-            <small>{profileIdentity}</small>
-          </span>
-          <span>
-            <strong>Records</strong>
-            <small>Firings, glazes, clay bodies</small>
-          </span>
-          <span>
-            <strong>Posts</strong>
-            <small>Optional links and image tags</small>
-          </span>
-          <span>
-            <strong>Auth</strong>
-            <small>{viewer.authProvider === "google" ? "Google OAuth" : "Supabase Auth"}</small>
-          </span>
-        </div>
-        {business && (
-          <div className="kb-settings-list">
-            <SettingRow title="Business hours" body={business.businessHours ?? "Hours not published yet."} />
-            <SettingRow title="Contact email" body={business.contactEmail ?? viewer.email ?? "Contact email private."} />
-            <SettingRow title="Contact phone" body={business.contactPhone ?? "Phone not published."} />
-            <SettingRow title="Studio address" body={business.publicStudioAddress ?? "Address private."} />
-            <SettingRow title="Social and shop links" body={[business.instagram, business.etsy, business.shopify, business.facebook, business.youtube].filter(Boolean).join(" / ") || "No public shop links yet."} />
+        <section className="kb-profile-section">
+          <div className="kb-section-title compact">
+            <h3>Process library</h3>
+            <span>Records connected to this profile</span>
           </div>
-        )}
-        <div className="kb-chip-row">
-          <span className="kb-chip record">{profileIdentity}</span>
-          <span className="kb-chip">{viewer.emailVerified ? "verified email" : "email pending"}</span>
-          {viewer.specialties.map((specialty) => (
-            <span className="kb-chip" key={specialty}>{specialty}</span>
-          ))}
-        </div>
-        <button type="button" className="kb-primary-button" onClick={onOpenSettings}>
-          <Settings size={18} />
-          <span>Edit settings</span>
-        </button>
+          <div className="kb-profile-hierarchy" aria-label="Profile hierarchy">
+            <span>
+              <strong>Firings</strong>
+              <small>Live tracking and past kiln logs</small>
+            </span>
+            <span>
+              <strong>Glazes</strong>
+              <small>Recipes, supplier glazes, and results</small>
+            </span>
+            <span>
+              <strong>Clay bodies</strong>
+              <small>Profiles, fit notes, and fired color</small>
+            </span>
+            <span>
+              <strong>Posts</strong>
+              <small>Shared public process updates</small>
+            </span>
+          </div>
+        </section>
       </section>
-      <aside className="kb-panel">
-        <div className="kb-section-title compact">
-          <h3>Recent posts</h3>
-          <span>{posts.length} linked records</span>
-        </div>
-        {posts.map((post) => (
-          <div className="kb-linked-row" key={post.id}>
-            <span>{post.body.slice(0, 58)}...</span>
-            <strong>{post.likes}</strong>
-            <small>likes</small>
+      <aside className="kb-profile-side">
+        <section className="kb-panel">
+          <div className="kb-section-title compact">
+            <h3>Recent posts</h3>
+            <span>{posts.length} linked records</span>
           </div>
-        ))}
-        <AddDraftList drafts={drafts.slice(0, 4)} compact />
+          <div className="kb-profile-posts">
+            {posts.map((post) => (
+              <article className="kb-profile-post-row" key={post.id}>
+                <p>{post.body}</p>
+                <span>{post.likes} likes · {post.comments} comments</span>
+              </article>
+            ))}
+          </div>
+        </section>
+        {business && (
+          <section className="kb-panel">
+            <div className="kb-section-title compact">
+              <h3>Business info</h3>
+              <span>{business.businessHours ?? "Hours not published"}</span>
+            </div>
+            <div className="kb-contact-list">
+              <span>
+                <strong>Email</strong>
+                <small>{business.contactEmail ?? viewer.email ?? "Private"}</small>
+              </span>
+              <span>
+                <strong>Phone</strong>
+                <small>{business.contactPhone ?? "Private"}</small>
+              </span>
+              <span>
+                <strong>Location</strong>
+                <small>{business.publicStudioAddress ?? viewer.locationLabel ?? "Private"}</small>
+              </span>
+            </div>
+            <div className="kb-profile-link-row">
+              {business.websiteUrl && <a className="kb-primary-button" href={normalizePublicUrl(business.websiteUrl)}>Visit website</a>}
+              {business.googleMapsUrl && <a className="kb-quiet-button" href={normalizePublicUrl(business.googleMapsUrl)}>Directions</a>}
+            </div>
+          </section>
+        )}
+        <section className="kb-panel">
+          <div className="kb-section-title compact">
+            <h3>Drafts</h3>
+            <span>{drafts.length} saved</span>
+          </div>
+          <AddDraftList drafts={drafts.slice(0, 4)} compact />
+        </section>
       </aside>
     </div>
   );
@@ -5896,40 +6044,102 @@ function SettingsScreen({
   const businessProfile = getEntitlementDecision(plan, "business_profile");
   const costTracking = getEntitlementDecision(plan, "cost_tracking");
   const advancedExport = getEntitlementDecision(plan, "advanced_export");
+  const authLabel = viewer.authProvider === "google" ? "Google OAuth" : "Email auth";
+  const unitsLabel = [
+    viewer.preferredTemperatureUnit.toUpperCase(),
+    viewer.preferredWeightUnit,
+    viewer.preferredWindSpeedUnit,
+  ].join(" · ");
+
   return (
-    <div className="kb-grid-two">
-      <section className="kb-panel">
-        <div className="kb-section-title">
-          <div>
-            <p className="kb-kicker">Account settings</p>
-            <h2>Authentication, units, privacy, and notifications</h2>
-          </div>
+    <div className="kb-settings-layout">
+      <section className="kb-panel kb-settings-hero">
+        <div
+          className={viewer.avatarUrl ? "kb-avatar large photo" : "kb-avatar large"}
+          style={
+            viewer.avatarUrl
+              ? { backgroundImage: `url(${viewer.avatarUrl})` }
+              : { background: viewer.avatarColor }
+          }
+        >
+          {!viewer.avatarUrl && viewer.displayName.slice(0, 1)}
         </div>
-        <div className="kb-settings-list">
-          <SettingRow
-            title="Supabase Auth"
-            body={`${viewer.authProvider === "google" ? "Google OAuth" : "Email auth"} profile model${viewer.emailVerified ? " with verified email" : ""}.`}
-          />
-          <SettingRow title="Account email" body={viewer.email ?? "Private until a Supabase session is connected."} />
-          <SettingRow title="Profile identity" body="Choose artist, studio, educator, researcher, collective, supplier, or a custom label." />
-          <SettingRow title="Preferred units" body="Celsius, grams, liters, and kph stored as normalized presentation preferences." />
-          <SettingRow title="Profile visibility" body="Public profile, private email, configurable notification preferences." />
+        <div>
+          <p className="kb-kicker">Account settings</p>
+          <h2>{viewer.displayName}</h2>
+          <span>@{viewer.username} · {authLabel}{viewer.emailVerified ? " · verified" : ""}</span>
+        </div>
+        <EntitlementBadge allowed label={formatPlanLabel(plan)} />
+      </section>
+      <section className="kb-settings-main">
+        <div className="kb-settings-card-grid">
+          <article className="kb-panel kb-settings-card">
+            <div className="kb-section-title compact">
+              <h3>Account</h3>
+              <span>Authentication and email</span>
+            </div>
+            <div className="kb-settings-list">
+              <SettingRow title="Sign-in method" body={authLabel} />
+              <SettingRow title="Account email" body={viewer.email ?? "Private until a Supabase session is connected."} />
+              <SettingRow title="Email status" body={viewer.emailVerified ? "Verified" : "Pending verification"} />
+            </div>
+          </article>
+          <article className="kb-panel kb-settings-card">
+            <div className="kb-section-title compact">
+              <h3>Profile</h3>
+              <span>Public identity</span>
+            </div>
+            <div className="kb-settings-list">
+              <SettingRow title="Profile identity" body={viewer.identityLabel ?? formatProfileType(viewer.profileType)} />
+              <SettingRow title="Location label" body={viewer.locationLabel ?? "Not shown"} />
+              <SettingRow title="Preferred units" body={unitsLabel} />
+            </div>
+          </article>
+          <article className="kb-panel kb-settings-card">
+            <div className="kb-section-title compact">
+              <h3>Privacy</h3>
+              <span>Sharing defaults</span>
+            </div>
+            <div className="kb-settings-list">
+              <SettingRow title="Profile visibility" body={viewer.profileVisibility} />
+              <SettingRow title="Private recipes" body="Recipe visibility is saved per glaze recipe and enforced by policy." />
+              <SettingRow title="Public browsing" body="Signed-out visitors can see only public profiles, posts, and records." />
+            </div>
+          </article>
+          <article className="kb-panel kb-settings-card">
+            <div className="kb-section-title compact">
+              <h3>Notifications</h3>
+              <span>Product surfaces</span>
+            </div>
+            <div className="kb-settings-list">
+              <SettingRow title="Messages" body={`${messaging.limit ?? "Unlimited"} new conversation requests on this plan.`} />
+              <SettingRow title="Firing reminders" body="Kiln holds, cooling checks, and maintenance reminders can be enabled from firing records." />
+              <SettingRow title="Profile updates" body="Followers can be notified when public posts are shared." />
+            </div>
+          </article>
         </div>
       </section>
-      <aside className="kb-panel">
-        <div className="kb-section-title compact">
-          <h3>Subscription</h3>
-          <EntitlementBadge allowed label={formatPlanLabel(plan)} />
-        </div>
-        <BusinessLaunchCard active={businessProfile.allowed} />
-        <div className="kb-settings-list">
-          <SettingRow title="Monthly conversation requests" body={`${messaging.limit ?? "Unlimited"} new requests available on this plan.`} />
-          <SettingRow title="Recipe version history" body={privateHistory.allowed ? "Private recipe history is active." : privateHistory.reason} />
-          <SettingRow title="Free plan promise" body="Firings, glazes, clay bodies, images, posting, following, comments, and community browsing stay available on Free." />
-          <SettingRow title="Business profile" body={businessProfile.allowed ? "Public business profile, portfolio links, services, contact, and directory placement are active." : businessProfile.reason} />
-          <SettingRow title="Cost tracking" body={costTracking.allowed ? "Fuel, labor, maintenance, depreciation, and per-piece cost tools are active." : costTracking.reason} />
-          <SettingRow title="Exports" body={advancedExport.allowed ? "CSV, PDF reports, inventory reports, financial summaries, and JSON backups are active." : "Basic CSV and JSON backup included; PDF reports and financial summaries are Business."} />
-        </div>
+      <aside className="kb-settings-side">
+        <section className="kb-panel">
+          <div className="kb-section-title compact">
+            <h3>Subscription</h3>
+            <EntitlementBadge allowed label={formatPlanLabel(plan)} />
+          </div>
+          <BusinessLaunchCard active={businessProfile.allowed} />
+        </section>
+        <section className="kb-panel">
+          <div className="kb-section-title compact">
+            <h3>Plan features</h3>
+            <span>{businessProfile.allowed ? "Business active" : "Free plan"}</span>
+          </div>
+          <div className="kb-settings-list">
+            <SettingRow title="Core tools" body="Firings, glazes, clay bodies, images, posting, following, comments, and browsing stay available on Free." />
+            <SettingRow title="Recipe version history" body={privateHistory.allowed ? "Private recipe history is active." : privateHistory.reason} />
+            <SettingRow title="Business profile" body={businessProfile.allowed ? "Directory, services, contact, and portfolio tools are active." : businessProfile.reason} />
+            <SettingRow title="Cost tracking" body={costTracking.allowed ? "Fuel, labor, maintenance, depreciation, and per-piece tools are active." : costTracking.reason} />
+            <SettingRow title="Exports" body={advancedExport.allowed ? "CSV, PDF, inventory, finance, and JSON exports are active." : "Basic CSV and JSON backup included; PDF and finance exports are Business."} />
+          </div>
+        </section>
       </aside>
     </div>
   );
@@ -6182,6 +6392,21 @@ function relativeDate(value: string): string {
   const diffHours = Math.max((Date.now() - new Date(value).getTime()) / 3_600_000, 0);
   if (diffHours < 24) return `${Math.max(Math.round(diffHours), 1)}h`;
   return `${Math.round(diffHours / 24)}d`;
+}
+
+function formatMessageTimestamp(value: string): string {
+  const diffMinutes = Math.max((Date.now() - new Date(value).getTime()) / 60_000, 0);
+  if (diffMinutes < 60) return `${Math.max(Math.round(diffMinutes), 1)}m`;
+  const diffHours = diffMinutes / 60;
+  if (diffHours < 24) return `${Math.round(diffHours)}h`;
+  return `${Math.round(diffHours / 24)}d`;
+}
+
+function normalizePublicUrl(value: string, host?: string): string {
+  const trimmed = value.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const path = trimmed.replace(/^@/, "").replace(/^\/+/, "");
+  return host ? `https://${host}/${path}` : `https://${path}`;
 }
 
 function formatProfileType(profileType: Profile["profileType"]) {
