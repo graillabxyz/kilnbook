@@ -310,6 +310,8 @@ export function KilnbookWorkspace({
     }
 
     const supabase = createSupabaseBrowserClient();
+    const profileForUser = (userId: string) =>
+      snapshot.profiles.find((profile) => profile.id === userId) ?? snapshot.viewer;
 
     supabase.auth
       .getSession()
@@ -317,7 +319,7 @@ export function KilnbookWorkspace({
         if (!active) return;
         if (error) throw error;
         if (data.session?.user) {
-          setViewer(profileFromSupabaseUser(data.session.user, snapshot.viewer));
+          setViewer(profileFromSupabaseUser(data.session.user, profileForUser(data.session.user.id)));
           setAuthStatus({
             state: "signed-in",
             message: "Signed in with Supabase Auth.",
@@ -327,7 +329,7 @@ export function KilnbookWorkspace({
         setViewer(snapshot.viewer);
         setAuthStatus({
           state: "signed-out",
-          message: "Previewing the app without a Supabase session.",
+          message: "Signed out. Public content is visible; sign in to create and save records.",
         });
       })
       .catch((error: unknown) => {
@@ -342,7 +344,7 @@ export function KilnbookWorkspace({
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
       if (session?.user) {
-        setViewer(profileFromSupabaseUser(session.user, snapshot.viewer));
+        setViewer(profileFromSupabaseUser(session.user, profileForUser(session.user.id)));
         setAuthStatus({
           state: "signed-in",
           message: "Signed in with Supabase Auth.",
@@ -352,7 +354,7 @@ export function KilnbookWorkspace({
       setViewer(snapshot.viewer);
       setAuthStatus({
         state: "signed-out",
-        message: "Previewing the app without a Supabase session.",
+        message: "Signed out. Public content is visible; sign in to create and save records.",
       });
     });
     const unsubscribe = () => data.subscription.unsubscribe();
@@ -361,7 +363,7 @@ export function KilnbookWorkspace({
       active = false;
       unsubscribe?.();
     };
-  }, [snapshot.viewer]);
+  }, [snapshot.profiles, snapshot.viewer]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("flux-and-fire.feed-tab");
@@ -742,7 +744,7 @@ export function KilnbookWorkspace({
     setViewer(snapshot.viewer);
     setAuthStatus({
       state: "signed-out",
-      message: "Previewing the app without a Supabase session.",
+      message: "Signed out. Public content is visible; sign in to create and save records.",
     });
   };
 
@@ -891,12 +893,15 @@ export function KilnbookWorkspace({
           <Header
             viewerName={viewer.displayName}
             view={displayView}
+            authStatus={authStatus}
             query={query}
             onQueryChange={setQuery}
             onCreate={() => setAddChooserOpen(true)}
             onOpenNotifications={() => navigateToView("Settings")}
             onOpenProfile={() => navigateToView("Profile")}
             onSearchSubmit={() => navigateToView("Explore")}
+            onGoogleSignIn={handleGoogleSignIn}
+            onSignOut={handleSignOut}
           />
           {activeAddFlow ? (
             <AddFlowScreen
@@ -931,10 +936,6 @@ export function KilnbookWorkspace({
               onCreateGlazeProfile={createInlineGlazeProfile}
               onCreateClayBodyProfile={createInlineClayBodyProfile}
               onCreateKilnProfile={createInlineKilnProfile}
-              viewer={viewer}
-              authStatus={authStatus}
-              onGoogleSignIn={handleGoogleSignIn}
-              onSignOut={handleSignOut}
             />
           ) : null}
           {!activeAddFlow && view === "Dashboard" && (
@@ -1013,12 +1014,20 @@ export function KilnbookWorkspace({
           {!activeAddFlow && view === "Profile" && (
             <ProfileScreen
               viewer={viewer}
+              authStatus={authStatus}
               posts={snapshot.posts}
               drafts={addDrafts}
               onOpenSettings={() => setView("Settings")}
+              onGoogleSignIn={handleGoogleSignIn}
             />
           )}
-          {!activeAddFlow && view === "Settings" && <SettingsScreen viewer={viewer} />}
+          {!activeAddFlow && view === "Settings" && (
+            <SettingsScreen
+              viewer={viewer}
+              authStatus={authStatus}
+              onGoogleSignIn={handleGoogleSignIn}
+            />
+          )}
           {!activeAddFlow && view === "Library" && (
             <LibraryScreen
               glazes={glazes}
@@ -1095,23 +1104,32 @@ function Sidebar({
 function Header({
   viewerName,
   view,
+  authStatus,
   query,
   onQueryChange,
   onCreate,
   onOpenNotifications,
   onOpenProfile,
   onSearchSubmit,
+  onGoogleSignIn,
+  onSignOut,
 }: {
   viewerName: string;
   view: View;
+  authStatus: AuthStatus;
   query: string;
   onQueryChange: (query: string) => void;
   onCreate: () => void;
   onOpenNotifications: () => void;
   onOpenProfile: () => void;
   onSearchSubmit: () => void;
+  onGoogleSignIn: () => void;
+  onSignOut: () => void;
 }) {
   const isAddView = view === "Add";
+  const connected = authStatus.state === "signed-in";
+  const authBusy = authStatus.state === "loading";
+  const authDisabled = authBusy || authStatus.state === "unconfigured";
   return (
     <header
       className={[
@@ -1157,23 +1175,46 @@ function Header({
           placeholder="Search firings, glazes, clay bodies"
         />
       </form>
-      <div className="kb-header-actions" hidden={isAddView}>
-        <button
-          type="button"
-          className="kb-icon-button"
-          aria-label="Open notification settings"
-          onClick={onOpenNotifications}
-        >
-          <Bell size={18} />
-        </button>
-        <button type="button" className="kb-primary-button" onClick={onCreate}>
-          <Plus size={18} />
-          <span>Add</span>
-        </button>
-        <button type="button" className="kb-account-chip" onClick={onOpenProfile}>
-          <UserRound size={16} aria-hidden="true" />
-          <span>{viewerName}</span>
-        </button>
+      <div className="kb-header-actions">
+        {!isAddView && (
+          <>
+            <button
+              type="button"
+              className="kb-icon-button"
+              aria-label="Open notification settings"
+              onClick={onOpenNotifications}
+            >
+              <Bell size={18} />
+            </button>
+            <button type="button" className="kb-primary-button" onClick={onCreate}>
+              <Plus size={18} />
+              <span>Add</span>
+            </button>
+          </>
+        )}
+        {connected ? (
+          <>
+            <button type="button" className="kb-account-chip" onClick={onOpenProfile}>
+              <UserRound size={16} aria-hidden="true" />
+              <span>{viewerName}</span>
+            </button>
+            <button type="button" className="kb-quiet-button" onClick={onSignOut}>
+              <LogOut size={17} aria-hidden="true" />
+              <span>Sign out</span>
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="kb-quiet-button"
+            onClick={onGoogleSignIn}
+            disabled={authDisabled}
+            title={authStatus.state === "unconfigured" || authStatus.state === "error" ? authStatus.message : undefined}
+          >
+            <Mail size={17} aria-hidden="true" />
+            <span>{authBusy ? "Checking" : "Sign in"}</span>
+          </button>
+        )}
       </div>
     </header>
   );
@@ -2358,10 +2399,6 @@ function HomeScreen({
   onCreateGlazeProfile,
   onCreateClayBodyProfile,
   onCreateKilnProfile,
-  viewer,
-  authStatus,
-  onGoogleSignIn,
-  onSignOut,
 }: {
   feedTab: "Following" | "Popular";
   onFeedTabChange: (tab: "Following" | "Popular") => void;
@@ -2374,10 +2411,6 @@ function HomeScreen({
   onCreateGlazeProfile: () => GlazeProfile;
   onCreateClayBodyProfile: () => ClayBodyProfile;
   onCreateKilnProfile: () => KilnProfile;
-  viewer: Profile;
-  authStatus: AuthStatus;
-  onGoogleSignIn: () => void;
-  onSignOut: () => void;
 }) {
   const firingById = useMemo(() => createRecordMap(firings), [firings]);
   const glazeById = useMemo(() => createRecordMap(glazes), [glazes]);
@@ -2437,14 +2470,6 @@ function HomeScreen({
           )}
         </div>
       </section>
-      <aside className="kb-stack kb-home-rail">
-        <AuthOnboardingPreview
-          viewer={viewer}
-          authStatus={authStatus}
-          onGoogleSignIn={onGoogleSignIn}
-          onSignOut={onSignOut}
-        />
-      </aside>
     </div>
   );
 }
@@ -4240,7 +4265,7 @@ function AnalyticsScreen({
             <EntitlementBadge allowed={inventory.allowed} label={inventory.allowed ? "Business" : "Business preview"} />
           </div>
           <div className="kb-settings-list">
-            <SettingRow title="Material inventory" body="Silica has approximately 3 batches remaining for Quiet Tenmoku v3." />
+            <SettingRow title="Material inventory" body="Track material lots, batch quantities, reorder points, and recipe usage from your own records." />
             <SettingRow title="Kiln inventory" body="Track shelves, posts, cones, thermocouples, elements, burners, and maintenance history." />
             <SettingRow title="Advanced image search" body="Filter by glaze, clay body, firing, cone, temperature, kiln position, atmosphere, year, piece type, and defect." />
           </div>
@@ -4250,17 +4275,69 @@ function AnalyticsScreen({
   );
 }
 
+function AuthGate({
+  eyebrow,
+  title,
+  body,
+  authStatus,
+  onGoogleSignIn,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+  authStatus: AuthStatus;
+  onGoogleSignIn: () => void;
+}) {
+  const disabled = authStatus.state === "loading" || authStatus.state === "unconfigured";
+  return (
+    <section className="kb-panel kb-auth-gate">
+      <div className="kb-empty-state">
+        <LockKeyhole size={28} />
+        <p className="kb-kicker">{eyebrow}</p>
+        <strong>{title}</strong>
+        <p>{body}</p>
+        <button
+          type="button"
+          className="kb-primary-button"
+          onClick={onGoogleSignIn}
+          disabled={disabled}
+          title={authStatus.state === "unconfigured" || authStatus.state === "error" ? authStatus.message : undefined}
+        >
+          <Mail size={17} />
+          <span>{authStatus.state === "loading" ? "Checking session" : "Sign in with Google"}</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ProfileScreen({
   viewer,
+  authStatus,
   posts,
   drafts,
   onOpenSettings,
+  onGoogleSignIn,
 }: {
   viewer: Profile;
+  authStatus: AuthStatus;
   posts: Post[];
   drafts: AddDraft[];
   onOpenSettings: () => void;
+  onGoogleSignIn: () => void;
 }) {
+  if (authStatus.state !== "signed-in") {
+    return (
+      <AuthGate
+        eyebrow="Profile"
+        title="Sign in to create your profile"
+        body="Your public identity, private recipes, firing records, and saved glaze results belong under your account. Public browsing stays available without signing in."
+        authStatus={authStatus}
+        onGoogleSignIn={onGoogleSignIn}
+      />
+    );
+  }
+
   const profileIdentity = viewer.identityLabel ?? formatProfileType(viewer.profileType);
   const business = viewer.businessProfile;
   return (
@@ -4280,7 +4357,7 @@ function ProfileScreen({
           <div>
             <p className="kb-kicker">Public profile</p>
             <h2>{viewer.displayName}</h2>
-            <span>@{viewer.username} · {viewer.locationLabel}</span>
+            <span>@{viewer.username}{viewer.locationLabel ? ` · ${viewer.locationLabel}` : ""}</span>
           </div>
           {viewer.subscriptionTier === "business" && <BusinessBadge />}
           <VisibilityPill visibility={viewer.profileVisibility} />
@@ -4368,7 +4445,27 @@ function ProfileScreen({
   );
 }
 
-function SettingsScreen({ viewer }: { viewer: Profile }) {
+function SettingsScreen({
+  viewer,
+  authStatus,
+  onGoogleSignIn,
+}: {
+  viewer: Profile;
+  authStatus: AuthStatus;
+  onGoogleSignIn: () => void;
+}) {
+  if (authStatus.state !== "signed-in") {
+    return (
+      <AuthGate
+        eyebrow="Settings"
+        title="Sign in to manage account settings"
+        body="Authentication, privacy, notification, and subscription settings are only available after you connect a Supabase account."
+        authStatus={authStatus}
+        onGoogleSignIn={onGoogleSignIn}
+      />
+    );
+  }
+
   const plan = viewer.subscriptionTier;
   const messaging = getEntitlementDecision(plan, "limited_messaging");
   const privateHistory = getEntitlementDecision(plan, "private_recipe_history");
@@ -4443,85 +4540,6 @@ function LibraryScreen({
         <button type="button" onClick={() => onViewChange("Kilns")}>
           <LibraryCard title="Kilns" eyebrow={`${kilns.length} profiles`} detail="Specs and maintenance" color={BRAND_COLORS.cobalt} />
         </button>
-      </div>
-    </section>
-  );
-}
-
-function AuthOnboardingPreview({
-  viewer,
-  authStatus,
-  onGoogleSignIn,
-  onSignOut,
-}: {
-  viewer: Profile;
-  authStatus: AuthStatus;
-  onGoogleSignIn: () => void;
-  onSignOut: () => void;
-}) {
-  const [selectedType, setSelectedType] = useState("Artist");
-  const [mode, setMode] = useState<"Sign in" | "Sign up">("Sign in");
-  const connected = authStatus.state === "signed-in";
-
-  return (
-    <section className="kb-panel">
-      <p className="kb-kicker">Onboarding</p>
-      <h3>Profile setup checklist</h3>
-      <div className="kb-profile-type-grid" aria-label="Profile identity options">
-        {["Artist", "Studio", "Researcher", "Educator", "Collective", "Custom"].map((label) => (
-          <button
-            type="button"
-            className={selectedType === label ? "active" : ""}
-            key={label}
-            aria-pressed={selectedType === label}
-            onClick={() => setSelectedType(label)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="kb-checklist">
-        <span><CheckCircle2 size={17} /> {viewer.displayName} · @{viewer.username}</span>
-        <span><CheckCircle2 size={17} /> {selectedType} identity</span>
-        <span><CheckCircle2 size={17} /> Preferred units</span>
-        <span><CheckCircle2 size={17} /> First firing, glaze, or clay body</span>
-      </div>
-      <div className="kb-auth-tabs">
-        {(["Sign in", "Sign up"] as const).map((label) => (
-          <button
-            type="button"
-            className={mode === label ? "active" : ""}
-            key={label}
-            aria-pressed={mode === label}
-            onClick={() => setMode(label)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="kb-auth-card">
-        <span>
-          {connected
-            ? `${viewer.authProvider === "google" ? "Google" : "Supabase"} account connected`
-            : authStatus.message}
-        </span>
-        {viewer.email && <small>{viewer.emailVerified ? "Verified" : "Unverified"} email: {viewer.email}</small>}
-        {connected ? (
-          <button type="button" className="kb-quiet-button" onClick={onSignOut}>
-            <LogOut size={17} />
-            <span>Sign out</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="kb-primary-button full"
-            onClick={onGoogleSignIn}
-            disabled={authStatus.state === "loading" || authStatus.state === "unconfigured"}
-          >
-            <Mail size={17} />
-            <span>{mode === "Sign in" ? "Continue with Google" : "Sign up with Google"}</span>
-          </button>
-        )}
       </div>
     </section>
   );

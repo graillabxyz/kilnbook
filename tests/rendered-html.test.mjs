@@ -30,11 +30,12 @@ test("server-renders Flux and Fire without starter preview metadata", async () =
 
   const html = await response.text();
   assert.match(html, /<title>Flux and Fire<\/title>/i);
-  assert.match(html, /Firing journal/);
-  assert.match(html, /Quiet Tenmoku/);
   assert.match(html, /Home feed/);
   assert.match(html, /Ceramic process library/);
-  assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
+  assert.doesNotMatch(
+    html,
+    /codex-preview|Your site is taking shape|react-loading-skeleton|Quiet Tenmoku|Mara Chen|mara@example\.com|Profile setup checklist|Continue with Google/,
+  );
 });
 
 test("starter preview files and dependency are removed", async () => {
@@ -45,6 +46,7 @@ test("starter preview files and dependency are removed", async () => {
   ]);
 
   assert.match(page, /KilnbookWorkspace/);
+  assert.doesNotMatch(page, /profile-mara/);
   assert.match(layout, /PRODUCT\.name/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });

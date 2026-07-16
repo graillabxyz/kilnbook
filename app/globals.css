@@ -791,6 +791,10 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.kb-home-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .kb-stack {
   display: grid;
   gap: 1rem;
@@ -922,8 +926,7 @@ button:disabled {
   font-size: 0.82rem;
 }
 
-.kb-segmented,
-.kb-auth-tabs {
+.kb-segmented {
   display: inline-flex;
   gap: 0.2rem;
   padding: 0.25rem;
@@ -936,8 +939,7 @@ button:disabled {
   min-width: 4.5rem;
 }
 
-.kb-segmented button,
-.kb-auth-tabs button {
+.kb-segmented button {
   min-height: 2.15rem;
   border: 0;
   border-radius: 7px;
@@ -946,8 +948,7 @@ button:disabled {
   color: var(--kb-muted);
 }
 
-.kb-segmented button.active,
-.kb-auth-tabs button.active {
+.kb-segmented button.active {
   color: var(--kb-ink);
   background: var(--kb-surface-strong);
   box-shadow: 0 5px 16px rgba(67, 48, 35, 0.09);
@@ -2003,39 +2004,6 @@ button:disabled {
   line-height: 1.35;
 }
 
-.kb-profile-type-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-  margin: 0.75rem 0;
-}
-
-.kb-profile-type-grid button {
-  min-height: 2.35rem;
-  border: 1px solid var(--kb-line);
-  border-radius: 8px;
-  background: rgba(255, 253, 249, 0.72);
-  color: var(--kb-muted);
-  font-weight: 700;
-}
-
-.kb-profile-type-grid button.active {
-  border-color: rgba(163, 67, 36, 0.3);
-  background: var(--kb-terracotta-soft);
-  color: var(--kb-terracotta);
-}
-
-.kb-auth-card {
-  display: grid;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
-}
-
-.kb-auth-card span,
-.kb-auth-card small {
-  color: var(--kb-muted);
-}
-
 .kb-auth-callback {
   min-height: 100vh;
   display: grid;
@@ -2246,20 +2214,13 @@ button:disabled {
   }
 
   .kb-header-actions {
-    justify-content: space-between;
-  }
-
-  .kb-home-header .kb-header-actions {
     justify-content: flex-end;
+    min-width: 0;
   }
 
-  .kb-home-header .kb-primary-button span {
+  .kb-header-actions > .kb-icon-button,
+  .kb-header-actions > .kb-primary-button {
     display: none;
-  }
-
-  .kb-home-header .kb-primary-button {
-    width: 2.55rem;
-    padding: 0;
   }
 
   .kb-account-chip {
@@ -2427,10 +2388,6 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .kb-profile-type-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .kb-business-profile {
     grid-template-columns: 1fr;
   }
@@ -2441,10 +2398,6 @@ button:disabled {
 
   .kb-home-grid {
     display: block;
-  }
-
-  .kb-home-rail {
-    display: none;
   }
 
   .kb-feed-panel {

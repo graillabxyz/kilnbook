@@ -1,4 +1,8 @@
+import { createClient } from "@supabase/supabase-js";
+import { BRAND_COLORS, BRAND_PROFILE_COLORS } from "../brand";
 import type {
+  AuthProvider,
+  AtmosphereType,
   CeramicImage,
   ClayBodyProfile,
   ConversationPreview,
@@ -6,15 +10,25 @@ import type {
   FiringLogPoint,
   FiringRecord,
   FiringSegment,
+  FiringType,
   GlazeApplication,
   GlazeApplicationLayer,
   GlazeProfile,
   GlazeRecipeVersion,
+  KilnLocation,
   KilnProfile,
   Post,
   Profile,
+  ProfileType,
+  UserPlan,
+  Visibility,
+  WindSpeedUnit,
+  WeightUnit,
+  TemperatureUnit,
 } from "../domain";
-import { kilnbookSeed } from "../seed-data";
+import { readClientSupabaseEnv } from "../env";
+
+type Row = Record<string, any>;
 
 export interface KilnbookWorkspaceSnapshot {
   viewer: Profile;
@@ -38,31 +52,390 @@ export interface KilnbookRepository {
   getWorkspaceSnapshot(profileId: string): Promise<KilnbookWorkspaceSnapshot>;
 }
 
-export class PreviewKilnbookRepository implements KilnbookRepository {
-  async getWorkspaceSnapshot(profileId: string): Promise<KilnbookWorkspaceSnapshot> {
-    const viewer =
-      kilnbookSeed.profiles.find((profile) => profile.id === profileId) ??
-      kilnbookSeed.profiles[0];
+const anonymousViewer: Profile = {
+  id: "anonymous",
+  displayName: "Guest",
+  username: "guest",
+  avatarColor: BRAND_COLORS.cobalt,
+  biography: "",
+  profileType: "artist",
+  authProvider: "unknown",
+  emailVerified: false,
+  specialties: [],
+  preferredTemperatureUnit: "c",
+  preferredWeightUnit: "g",
+  preferredWindSpeedUnit: "kph",
+  profileVisibility: "public",
+  subscriptionTier: "free",
+  onboardingComplete: false,
+};
 
-    return {
-      viewer,
-      profiles: [...kilnbookSeed.profiles],
-      kilns: [...kilnbookSeed.kilns],
-      clayBodies: [...kilnbookSeed.clayBodies],
-      glazes: [...kilnbookSeed.glazes],
-      glazeRecipeVersions: [...kilnbookSeed.glazeRecipeVersions],
-      firings: [...kilnbookSeed.firings],
-      firingSegments: [...kilnbookSeed.firingSegments],
-      firingLogPoints: [...kilnbookSeed.firingLogPoints],
-      firingEnvironmentRecords: [...kilnbookSeed.firingEnvironmentRecords],
-      glazeApplications: [...kilnbookSeed.glazeApplications],
-      glazeApplicationLayers: [...kilnbookSeed.glazeApplicationLayers],
-      images: [...kilnbookSeed.images],
-      posts: [...kilnbookSeed.posts],
-      conversations: [...kilnbookSeed.conversations],
-    };
+const emptySnapshot: KilnbookWorkspaceSnapshot = {
+  viewer: anonymousViewer,
+  profiles: [],
+  kilns: [],
+  clayBodies: [],
+  glazes: [],
+  glazeRecipeVersions: [],
+  firings: [],
+  firingSegments: [],
+  firingLogPoints: [],
+  firingEnvironmentRecords: [],
+  glazeApplications: [],
+  glazeApplicationLayers: [],
+  images: [],
+  posts: [],
+  conversations: [],
+};
+
+function text(value: unknown, fallback = "") {
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function arrayValue(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function visibilityValue(value: unknown, fallback: Visibility = "public"): Visibility {
+  return value === "private" || value === "followers" || value === "studio" || value === "public"
+    ? value
+    : fallback;
+}
+
+function authProviderValue(value: unknown, fallback: AuthProvider = "unknown"): AuthProvider {
+  return value === "email" || value === "google" || value === "magic_link" || value === "sso" || value === "unknown"
+    ? value
+    : fallback;
+}
+
+function hashColor(seed: unknown, palette: readonly string[] = BRAND_PROFILE_COLORS) {
+  const value = text(seed, "flux");
+  const total = [...value].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[total % palette.length] ?? BRAND_COLORS.terracotta;
+}
+
+function mapProfile(row: Row, authDetails?: Row): Profile {
+  return {
+    id: text(row.id),
+    displayName: text(row.display_name, "Ceramic artist"),
+    username: text(row.username, "artist"),
+    avatarColor: hashColor(row.username),
+    avatarUrl: row.avatar_url ?? undefined,
+    biography: text(row.biography),
+    profileType: text(row.profile_type, "artist") as ProfileType,
+    identityLabel: row.identity_label ?? undefined,
+    email: authDetails?.email ?? undefined,
+    authProvider: authProviderValue(authDetails?.auth_provider),
+    authProviderId: authDetails?.auth_provider_id ?? undefined,
+    emailVerified: Boolean(authDetails?.email_verified),
+    locationLabel: row.approximate_location ?? undefined,
+    website: row.website ?? undefined,
+    specialties: arrayValue(row.ceramic_specialties),
+    preferredTemperatureUnit: text(row.preferred_temperature_unit, "c") as TemperatureUnit,
+    preferredWeightUnit: text(row.preferred_weight_unit, "g") as WeightUnit,
+    preferredWindSpeedUnit: text(row.preferred_wind_speed_unit, "kph") as WindSpeedUnit,
+    profileVisibility: visibilityValue(row.visibility),
+    subscriptionTier: text(row.subscription_tier, "free") as UserPlan,
+    onboardingComplete: Boolean(row.onboarding_complete),
+  };
+}
+
+function mapGlaze(row: Row): GlazeProfile {
+  return {
+    id: text(row.id),
+    ownerId: text(row.owner_id),
+    name: text(row.name, "Untitled glaze"),
+    creatorAttribution: text(row.creator_attribution, "Unknown"),
+    source: text(row.source, "Live database"),
+    glazeType: text(row.glaze_type, "glaze"),
+    surface: text(row.surface, text(row.finish, "surface pending")),
+    colorFamily: arrayValue(row.color_family),
+    opacity: text(row.opacity, "unknown"),
+    firingRange: text(row.firing_range, text(row.cone_range, "Cone range pending")),
+    coneRange: text(row.cone_range, "pending"),
+    atmosphereCompatibility: arrayValue(row.atmosphere_compatibility) as AtmosphereType[],
+    recipeVisibility: visibilityValue(row.recipe_visibility),
+    profileVisibility: visibilityValue(row.profile_visibility),
+    description: text(row.description),
+    applicationNotes: text(row.application_notes),
+    heroImageColor: hashColor(row.name, [
+      BRAND_COLORS.terracotta,
+      BRAND_COLORS.ashBlue,
+      BRAND_COLORS.sun,
+      BRAND_COLORS.moss,
+      BRAND_COLORS.stone,
+    ]),
+    currentRecipeVersionId: "",
+  };
+}
+
+function mapClayBody(row: Row): ClayBodyProfile {
+  return {
+    id: text(row.id),
+    ownerId: text(row.owner_id),
+    name: text(row.name, "Untitled clay body"),
+    manufacturer: text(row.manufacturer),
+    supplier: text(row.supplier),
+    bodyType: text(row.body_type, "clay"),
+    rawColor: text(row.raw_color, "unknown"),
+    firedColor: text(row.fired_color, "pending"),
+    texture: text(row.texture, "unspecified"),
+    grogPercentage: row.grog_percentage == null ? undefined : numberValue(row.grog_percentage),
+    absorptionPercentage: row.absorption_percentage == null ? undefined : numberValue(row.absorption_percentage),
+    shrinkagePercentage: row.shrinkage_percentage == null ? undefined : numberValue(row.shrinkage_percentage),
+    coneRange: text(row.cone_range, text(row.maturation_range, "pending")),
+    atmosphereSuitability: arrayValue(row.atmosphere_suitability) as AtmosphereType[],
+    recipeVisibility: visibilityValue(row.recipe_visibility),
+    profileVisibility: visibilityValue(row.profile_visibility),
+    notes: text(row.notes),
+    imageColor: hashColor(row.name, [BRAND_COLORS.stone, BRAND_COLORS.clay, BRAND_COLORS.ashBlue]),
+  };
+}
+
+function mapKiln(row: Row): KilnProfile {
+  return {
+    id: text(row.id),
+    ownerId: text(row.owner_id),
+    name: text(row.name, "Untitled kiln"),
+    manufacturer: text(row.manufacturer, "Unknown"),
+    model: text(row.model, "Unknown"),
+    kilnType: text(row.kiln_type, "electric") as FiringType,
+    fuelType: text(row.fuel_type, "unknown"),
+    controllerType: text(row.controller_type, "unspecified"),
+    usableVolumeLiters: numberValue(row.usable_volume_liters),
+    maxTemperatureC: numberValue(row.maximum_temperature_c),
+    recommendedConeRange: text(row.recommended_cone_range, "pending"),
+    defaultLocation: text(row.default_location, "indoors") as KilnLocation,
+    powerKw: row.power_kw == null ? undefined : numberValue(row.power_kw),
+    active: row.active !== false,
+    visibility: visibilityValue(row.visibility),
+    notes: text(row.notes),
+  };
+}
+
+function mapFiring(row: Row): FiringRecord {
+  const kilnSpec =
+    typeof row.kiln_spec_snapshot === "string"
+      ? row.kiln_spec_snapshot
+      : JSON.stringify(row.kiln_spec_snapshot ?? {});
+  return {
+    id: text(row.id),
+    ownerId: text(row.owner_id),
+    studioId: row.studio_id ?? undefined,
+    title: text(row.title, "Untitled firing"),
+    readableNumber: text(row.readable_number, "Firing"),
+    kilnId: text(row.kiln_id),
+    kilnNameSnapshot: text(row.kiln_name_snapshot, "Kiln"),
+    kilnSpecSnapshot: kilnSpec,
+    firingType: text(row.firing_type, "electric") as FiringType,
+    status: text(row.status, "draft") as FiringRecord["status"],
+    visibility: visibilityValue(row.visibility),
+    plannedStartAt: text(row.planned_start_at, text(row.created_at, new Date().toISOString())),
+    actualStartAt: row.actual_start_at ?? undefined,
+    actualEndAt: row.actual_end_at ?? undefined,
+    timezone: text(row.timezone, "UTC"),
+    leadFirer: text(row.lead_firer_id, "Unknown"),
+    targetTemperatureC: numberValue(row.target_temperature_c, 1222),
+    targetCone: text(row.target_cone, "6"),
+    witnessConeResult: row.witness_cone_result ?? undefined,
+    atmosphere: text(row.firing_atmosphere, "unknown") as AtmosphereType,
+    loadFullnessPercentage: numberValue(row.load_fullness_percentage, 0),
+    totalHeatingMinutes: row.total_heating_minutes == null ? undefined : numberValue(row.total_heating_minutes),
+    totalCoolingMinutes: row.total_cooling_minutes == null ? undefined : numberValue(row.total_cooling_minutes),
+    notes: text(row.notes),
+  };
+}
+
+function mapImage(row: Row): CeramicImage {
+  return {
+    id: text(row.id),
+    ownerId: text(row.owner_id),
+    storagePath: text(row.storage_path),
+    altText: text(row.alt_text),
+    caption: text(row.caption),
+    focalPoint: typeof row.focal_point === "object" && row.focal_point ? row.focal_point : { x: 0.5, y: 0.5 },
+    visibility: visibilityValue(row.visibility),
+    firingIds: [],
+    glazeIds: [],
+    clayBodyIds: [],
+    pieceIds: [],
+    glazeApplicationIds: [],
+  };
+}
+
+function mapPost(
+  row: Row,
+  profilesById: Map<string, Profile>,
+  linkedGlazeIds: Map<string, string[]>,
+  linkedClayIds: Map<string, string[]>,
+  linkedFiringIds: Map<string, string[]>,
+  linkedImageIds: Map<string, string[]>,
+  commentsByPost: Map<string, number>,
+  likesByPost: Map<string, number>,
+): Post {
+  const author = profilesById.get(text(row.author_id));
+  const postId = text(row.id);
+  const glazeIds = linkedGlazeIds.get(postId) ?? [];
+  const clayIds = linkedClayIds.get(postId) ?? [];
+  const firingIds = linkedFiringIds.get(postId) ?? [];
+  return {
+    id: postId,
+    authorId: text(row.author_id),
+    authorName: author?.displayName ?? "Ceramic artist",
+    authorUsername: author?.username ?? "artist",
+    body: text(row.body),
+    createdAt: text(row.created_at, new Date().toISOString()),
+    editedAt: row.edited_at ?? undefined,
+    visibility: visibilityValue(row.visibility),
+    linkedFiringId: firingIds[0],
+    linkedGlazeId: glazeIds[0],
+    linkedClayBodyId: clayIds[0],
+    imageIds: linkedImageIds.get(postId) ?? [],
+    hashtags: [],
+    structuredTagLabels: [
+      ...glazeIds.map(() => "Glaze"),
+      ...clayIds.map(() => "Clay body"),
+      ...firingIds.map(() => "Firing"),
+    ],
+    likes: likesByPost.get(postId) ?? numberValue(row.engagement_score),
+    comments: commentsByPost.get(postId) ?? 0,
+    replies: 0,
+    saves: 0,
+    uniqueInteractors: likesByPost.get(postId) ?? 0,
+    viewerLiked: false,
+    locationLabel: row.broad_location ?? undefined,
+  };
+}
+
+function groupIds(rows: Row[] | null, key: string) {
+  const grouped = new Map<string, string[]>();
+  for (const row of rows ?? []) {
+    const postId = text(row.post_id);
+    const value = text(row[key]);
+    if (!postId || !value) continue;
+    grouped.set(postId, [...(grouped.get(postId) ?? []), value]);
+  }
+  return grouped;
+}
+
+function countByPost(rows: Row[] | null) {
+  const counts = new Map<string, number>();
+  for (const row of rows ?? []) {
+    const postId = text(row.post_id);
+    if (!postId) continue;
+    counts.set(postId, (counts.get(postId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+async function readTable<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {
+  const { data, error } = await promise;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export class SupabaseKilnbookRepository implements KilnbookRepository {
+  async getWorkspaceSnapshot(profileId: string): Promise<KilnbookWorkspaceSnapshot> {
+    const parsed = readClientSupabaseEnv();
+    if (!parsed.success) return emptySnapshot;
+
+    const supabase = createClient(
+      parsed.data.NEXT_PUBLIC_SUPABASE_URL,
+      parsed.data.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      },
+    );
+
+    try {
+      const [
+        profileRows,
+        profileAuthRows,
+        kilnRows,
+        clayRows,
+        glazeRows,
+        firingRows,
+        imageRows,
+        postRows,
+        postGlazeRows,
+        postClayRows,
+        postFiringRows,
+        postImageRows,
+        commentRows,
+        likeRows,
+      ] = await Promise.all([
+        readTable<Row>(supabase.from("profiles").select("*").eq("visibility", "public").order("created_at")),
+        readTable<Row>(supabase.from("profile_auth_details").select("profile_id,email,auth_provider,auth_provider_id,email_verified")),
+        readTable<Row>(supabase.from("kilns").select("*").eq("visibility", "public").order("created_at")),
+        readTable<Row>(supabase.from("clay_bodies").select("*").eq("profile_visibility", "public").order("created_at")),
+        readTable<Row>(supabase.from("glazes").select("*").eq("profile_visibility", "public").order("created_at")),
+        readTable<Row>(supabase.from("firings").select("*").eq("visibility", "public").order("created_at", { ascending: false })),
+        readTable<Row>(supabase.from("images").select("*").eq("visibility", "public").order("created_at", { ascending: false })),
+        readTable<Row>(supabase.from("posts").select("*").eq("visibility", "public").order("created_at", { ascending: false }).limit(50)),
+        readTable<Row>(supabase.from("post_glazes").select("*")),
+        readTable<Row>(supabase.from("post_clay_bodies").select("*")),
+        readTable<Row>(supabase.from("post_firings").select("*")),
+        readTable<Row>(supabase.from("post_images").select("*")),
+        readTable<Row>(supabase.from("comments").select("post_id").is("deleted_at", null).is("hidden_at", null)),
+        readTable<Row>(supabase.from("post_likes").select("post_id")),
+      ]);
+
+      const profileAuthById = new Map(profileAuthRows.map((row) => [text(row.profile_id), row]));
+      const profiles = profileRows.map((profile) => mapProfile(profile, profileAuthById.get(text(profile.id))));
+      const profilesById = createRecordMap(profiles);
+      const linkedGlazeIds = groupIds(postGlazeRows, "glaze_id");
+      const linkedClayIds = groupIds(postClayRows, "clay_body_id");
+      const linkedFiringIds = groupIds(postFiringRows, "firing_id");
+      const linkedImageIds = groupIds(postImageRows, "image_id");
+      const commentsByPost = countByPost(commentRows);
+      const likesByPost = countByPost(likeRows);
+      const posts = postRows.map((post) =>
+        mapPost(
+          post,
+          profilesById,
+          linkedGlazeIds,
+          linkedClayIds,
+          linkedFiringIds,
+          linkedImageIds,
+          commentsByPost,
+          likesByPost,
+        ),
+      );
+
+      return {
+        viewer: profilesById.get(profileId) ?? anonymousViewer,
+        profiles,
+        kilns: kilnRows.map(mapKiln),
+        clayBodies: clayRows.map(mapClayBody),
+        glazes: glazeRows.map(mapGlaze),
+        glazeRecipeVersions: [],
+        firings: firingRows.map(mapFiring),
+        firingSegments: [],
+        firingLogPoints: [],
+        firingEnvironmentRecords: [],
+        glazeApplications: [],
+        glazeApplicationLayers: [],
+        images: imageRows.map(mapImage),
+        posts,
+        conversations: [],
+      };
+    } catch (error) {
+      console.error("Unable to load Supabase workspace snapshot", error);
+      return emptySnapshot;
+    }
   }
 }
 
-export const previewRepository = new PreviewKilnbookRepository();
+function createRecordMap<T extends { id: string }>(records: T[]) {
+  return new Map(records.map((record) => [record.id, record]));
+}
 
+export const previewRepository = new SupabaseKilnbookRepository();

@@ -9,7 +9,7 @@ export const envSchema = z.object({
 
 export type KilnbookEnv = z.infer<typeof envSchema>;
 
-export function readClientSupabaseEnv(source?: NodeJS.ProcessEnv) {
+export function readClientSupabaseEnv(source?: Partial<NodeJS.ProcessEnv>) {
   const publicEnv = source ?? {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY:
