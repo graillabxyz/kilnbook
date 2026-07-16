@@ -183,3 +183,34 @@ test("messages, profile, and settings use modern social layouts", async () => {
   assert.match(globals, /\.kb-settings-card-grid/);
   assert.match(globals, /grid-template-areas:\n    "hero hero"/);
 });
+
+test("post composer supports psychographic UX model and multi-result image annotations", async () => {
+  const [workspace, globals, uxDoc, usabilityDoc] = await Promise.all([
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../docs/ux-psychographics.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/usability-review.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(uxDoc, /Flux and Fire UX Psychographics/);
+  assert.match(uxDoc, /Firing Detail Ladder/);
+  assert.match(uxDoc, /Result group/);
+  assert.match(uxDoc, /Historic Archivist/);
+  assert.match(uxDoc, /Mobile-First Casual Poster/);
+  assert.match(usabilityDoc, /docs\/ux-psychographics\.md/);
+
+  assert.match(workspace, /type ComposerImageAnnotation/);
+  assert.match(workspace, /annotations: ComposerImageAnnotation\[\]/);
+  assert.match(workspace, /Result group 1/);
+  assert.match(workspace, /Add result group/);
+  assert.match(workspace, /New historic firing/);
+  assert.match(workspace, /Unknown or unrecorded firing/);
+  assert.match(workspace, /Post context/);
+  assert.match(workspace, /Broad records for the whole post/);
+  assert.doesNotMatch(workspace, /Each image can show different glazes/);
+  assert.doesNotMatch(workspace, /Add profile/);
+
+  assert.match(globals, /\.kb-image-annotation-list/);
+  assert.match(globals, /\.kb-image-annotation/);
+  assert.match(globals, /\.kb-add-group-button/);
+});

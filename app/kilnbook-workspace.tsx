@@ -1183,6 +1183,22 @@ export function KilnbookWorkspace({
     return newFiring;
   };
 
+  const createInlineFiringRecord = () => {
+    const firing = createAddFiring("previous_firing", "public", new Date().toISOString(), {
+      title: `Historic firing ${firings.length + 1}`,
+      targetCone: "7",
+      targetTemperatureC: 1230,
+      notes: "Lightweight historic firing created from the post composer. Add kiln, atmosphere, curve, and environment details when known.",
+    });
+    recordAddDraft(
+      "previous_firing",
+      "public",
+      firing.title,
+      "Lightweight historic firing linked from the post composer.",
+    );
+    return firing;
+  };
+
   const handleGoogleSignIn = async () => {
     setAuthStatus({ state: "loading", message: "Opening Google sign-in." });
     const { error } = await signInWithGoogle("/");
@@ -1475,6 +1491,7 @@ export function KilnbookWorkspace({
               clayBodies={clayBodies}
               kilns={kilns}
               onOpenExplore={() => navigateToView("Explore")}
+              onCreateFiringRecord={createInlineFiringRecord}
               onCreateGlazeProfile={createInlineGlazeProfile}
               onCreateClayBodyProfile={createInlineClayBodyProfile}
               onCreateKilnProfile={createInlineKilnProfile}
@@ -2947,6 +2964,7 @@ function HomeScreen({
   clayBodies,
   kilns,
   onOpenExplore,
+  onCreateFiringRecord,
   onCreateGlazeProfile,
   onCreateClayBodyProfile,
   onCreateKilnProfile,
@@ -2959,6 +2977,7 @@ function HomeScreen({
   clayBodies: ClayBodyProfile[];
   kilns: KilnProfile[];
   onOpenExplore: () => void;
+  onCreateFiringRecord: () => FiringRecord;
   onCreateGlazeProfile: () => GlazeProfile;
   onCreateClayBodyProfile: () => ClayBodyProfile;
   onCreateKilnProfile: () => KilnProfile;
@@ -2995,6 +3014,7 @@ function HomeScreen({
           clayBodies={clayBodies}
           kilns={kilns}
           firings={firings}
+          onCreateFiringRecord={onCreateFiringRecord}
           onCreateGlazeProfile={onCreateGlazeProfile}
           onCreateClayBodyProfile={onCreateClayBodyProfile}
           onCreateKilnProfile={onCreateKilnProfile}
@@ -3029,6 +3049,13 @@ type ComposerImageDraft = {
   id: string;
   label: string;
   tone: "dark" | "pale";
+  annotations: ComposerImageAnnotation[];
+};
+
+type ComposerImageAnnotation = {
+  id: string;
+  label: string;
+  firingId: string;
   glazeIds: string[];
   clayBodyIds: string[];
 };
@@ -3050,6 +3077,7 @@ function PostComposer({
   clayBodies,
   kilns,
   firings,
+  onCreateFiringRecord,
   onCreateGlazeProfile,
   onCreateClayBodyProfile,
   onCreateKilnProfile,
@@ -3058,6 +3086,7 @@ function PostComposer({
   clayBodies: ClayBodyProfile[];
   kilns: KilnProfile[];
   firings: FiringRecord[];
+  onCreateFiringRecord: () => FiringRecord;
   onCreateGlazeProfile: () => GlazeProfile;
   onCreateClayBodyProfile: () => ClayBodyProfile;
   onCreateKilnProfile: () => KilnProfile;
@@ -3071,8 +3100,17 @@ function PostComposer({
   const [composerImages, setComposerImages] = useState<ComposerImageDraft[]>([]);
 
   const selectedFiring = firings.find((firing) => firing.id === selectedFiringId);
-  const hasImageTags = composerImages.some(
-    (image) => image.glazeIds.length > 0 || image.clayBodyIds.length > 0,
+  const imageAnnotationCount = composerImages.reduce(
+    (total, image) => total + image.annotations.length,
+    0,
+  );
+  const hasImageAnnotations = composerImages.some((image) =>
+    image.annotations.some(
+      (annotation) =>
+        Boolean(annotation.firingId) ||
+        annotation.glazeIds.length > 0 ||
+        annotation.clayBodyIds.length > 0,
+    ),
   );
   const canPublish =
     Boolean(postText.trim()) ||
@@ -3080,29 +3118,99 @@ function PostComposer({
     selectedGlazeIds.length > 0 ||
     selectedClayBodyIds.length > 0 ||
     selectedKilnIds.length > 0 ||
-    hasImageTags;
+    composerImages.length > 0 ||
+    hasImageAnnotations;
 
   const addUnique = (values: string[], value: string) =>
     value && !values.includes(value) ? [...values, value] : values;
 
-  const addImageGlaze = (imageId: string, glazeId: string) => {
+  const addAnnotationGlaze = (imageId: string, annotationId: string, glazeId: string) => {
     setComposerImages((images) =>
       images.map((image) =>
         image.id === imageId
-          ? { ...image, glazeIds: addUnique(image.glazeIds, glazeId) }
+          ? {
+              ...image,
+              annotations: image.annotations.map((annotation) =>
+                annotation.id === annotationId
+                  ? { ...annotation, glazeIds: addUnique(annotation.glazeIds, glazeId) }
+                  : annotation,
+              ),
+            }
           : image,
       ),
     );
   };
 
-  const addImageClayBody = (imageId: string, clayBodyId: string) => {
+  const addAnnotationClayBody = (imageId: string, annotationId: string, clayBodyId: string) => {
     setComposerImages((images) =>
       images.map((image) =>
         image.id === imageId
-          ? { ...image, clayBodyIds: addUnique(image.clayBodyIds, clayBodyId) }
+          ? {
+              ...image,
+              annotations: image.annotations.map((annotation) =>
+                annotation.id === annotationId
+                  ? { ...annotation, clayBodyIds: addUnique(annotation.clayBodyIds, clayBodyId) }
+                  : annotation,
+              ),
+            }
           : image,
       ),
     );
+  };
+
+  const updateAnnotationFiring = (imageId: string, annotationId: string, firingId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              annotations: image.annotations.map((annotation) =>
+                annotation.id === annotationId ? { ...annotation, firingId } : annotation,
+              ),
+            }
+          : image,
+      ),
+    );
+  };
+
+  const addImageAnnotation = (imageId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              annotations: [
+                ...image.annotations,
+                {
+                  id: `annotation-${Date.now()}`,
+                  label: `Result group ${image.annotations.length + 1}`,
+                  firingId: "",
+                  glazeIds: [],
+                  clayBodyIds: [],
+                },
+              ],
+            }
+          : image,
+      ),
+    );
+  };
+
+  const removeImageAnnotation = (imageId: string, annotationId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              annotations: image.annotations.filter((annotation) => annotation.id !== annotationId),
+            }
+          : image,
+      ),
+    );
+  };
+
+  const createAndLinkFiring = () => {
+    const firing = onCreateFiringRecord();
+    setSelectedFiringId(firing.id);
   };
 
   const createAndLinkGlaze = () => {
@@ -3120,31 +3228,53 @@ function PostComposer({
     setSelectedKilnIds((ids) => addUnique(ids, profile.id));
   };
 
-  const createAndTagImageGlaze = (imageId: string) => {
+  const createAndTagAnnotationFiring = (imageId: string, annotationId: string) => {
+    const firing = onCreateFiringRecord();
+    updateAnnotationFiring(imageId, annotationId, firing.id);
+  };
+
+  const createAndTagAnnotationGlaze = (imageId: string, annotationId: string) => {
     const profile = onCreateGlazeProfile();
-    addImageGlaze(imageId, profile.id);
+    addAnnotationGlaze(imageId, annotationId, profile.id);
   };
 
-  const createAndTagImageClayBody = (imageId: string) => {
+  const createAndTagAnnotationClayBody = (imageId: string, annotationId: string) => {
     const profile = onCreateClayBodyProfile();
-    addImageClayBody(imageId, profile.id);
+    addAnnotationClayBody(imageId, annotationId, profile.id);
   };
 
-  const removeImageGlaze = (imageId: string, glazeId: string) => {
+  const removeAnnotationGlaze = (imageId: string, annotationId: string, glazeId: string) => {
     setComposerImages((images) =>
       images.map((image) =>
         image.id === imageId
-          ? { ...image, glazeIds: image.glazeIds.filter((id) => id !== glazeId) }
+          ? {
+              ...image,
+              annotations: image.annotations.map((annotation) =>
+                annotation.id === annotationId
+                  ? { ...annotation, glazeIds: annotation.glazeIds.filter((id) => id !== glazeId) }
+                  : annotation,
+              ),
+            }
           : image,
       ),
     );
   };
 
-  const removeImageClayBody = (imageId: string, clayBodyId: string) => {
+  const removeAnnotationClayBody = (imageId: string, annotationId: string, clayBodyId: string) => {
     setComposerImages((images) =>
       images.map((image) =>
         image.id === imageId
-          ? { ...image, clayBodyIds: image.clayBodyIds.filter((id) => id !== clayBodyId) }
+          ? {
+              ...image,
+              annotations: image.annotations.map((annotation) =>
+                annotation.id === annotationId
+                  ? {
+                      ...annotation,
+                      clayBodyIds: annotation.clayBodyIds.filter((id) => id !== clayBodyId),
+                    }
+                  : annotation,
+              ),
+            }
           : image,
       ),
     );
@@ -3157,8 +3287,15 @@ function PostComposer({
         id: `composer-image-${Date.now()}`,
         label: `Image ${images.length + 1}`,
         tone: images.length % 2 === 0 ? "dark" : "pale",
-        glazeIds: [],
-        clayBodyIds: [],
+        annotations: [
+          {
+            id: `annotation-${Date.now()}`,
+            label: "Result group 1",
+            firingId: "",
+            glazeIds: [],
+            clayBodyIds: [],
+          },
+        ],
       },
     ]);
   };
@@ -3169,8 +3306,15 @@ function PostComposer({
       setPublishNotice("Add text, a record link, or an image tag before publishing.");
       return;
     }
-    setPublishNotice("Post draft is ready with the selected links and image tags.");
+    setPublishNotice(
+      `Post draft is ready with ${composerImages.length} image${composerImages.length === 1 ? "" : "s"} and ${imageAnnotationCount} result group${imageAnnotationCount === 1 ? "" : "s"}.`,
+    );
     setPostText("");
+    setSelectedFiringId("");
+    setSelectedGlazeIds([]);
+    setSelectedClayBodyIds([]);
+    setSelectedKilnIds([]);
+    setComposerImages([]);
   };
 
   return (
@@ -3180,7 +3324,7 @@ function PostComposer({
         <textarea
           value={postText}
           onChange={(event) => setPostText(event.target.value)}
-          placeholder="Post an old firing, a glaze result you liked, or a kiln-opening note. Link only the process data you want to share."
+          placeholder="Write the story. Add broad context for the post or tag exact result groups inside each image."
           rows={3}
         />
       </label>
@@ -3188,21 +3332,21 @@ function PostComposer({
         <section className="kb-compose-module" aria-labelledby="post-record-links">
           <div className="kb-module-head">
             <div>
-              <p className="kb-kicker" id="post-record-links">Optional record links</p>
-              <strong>Choose what the post should connect to</strong>
+              <p className="kb-kicker" id="post-record-links">Post context</p>
+              <strong>Broad records for the whole post</strong>
             </div>
             <VisibilityPill visibility="followers" />
           </div>
           <div className="kb-compose-controls compact">
             <label className="kb-select-field">
-              <span>Firing record</span>
+              <span>Overall firing</span>
               <span className="kb-select-wrap">
                 <select
                   aria-label="Link firing"
                   value={selectedFiringId}
                   onChange={(event) => setSelectedFiringId(event.target.value)}
                 >
-                  <option value="">No firing linked</option>
+                  <option value="">No overall firing</option>
                   {firings.map((firing) => (
                     <option key={firing.id} value={firing.id}>
                       {firing.readableNumber} · {firing.title}
@@ -3213,14 +3357,20 @@ function PostComposer({
               </span>
             </label>
             <div className="kb-select-field">
-              <span>Profiles</span>
+              <span>Context records</span>
               <InlinePicker
-                label="Add profile"
+                label="Add context"
                 icon={Plus}
                 groups={[
                   {
-                    label: "Create profile",
+                    label: "Create lightweight record",
                     options: [
+                      {
+                        label: "New historic firing",
+                        detail: "Cone, atmosphere, and notes can start simple",
+                        icon: Flame,
+                        onSelect: createAndLinkFiring,
+                      },
                       {
                         label: "New glaze profile",
                         detail: "Create and link a draft glaze",
@@ -3337,15 +3487,15 @@ function PostComposer({
               selectedGlazeIds.length === 0 &&
               selectedClayBodyIds.length === 0 &&
               selectedKilnIds.length === 0 && (
-                <span className="kb-muted-note">No record links selected</span>
+                <span className="kb-muted-note">No broad context selected</span>
               )}
           </div>
         </section>
         <section className="kb-compose-module" aria-labelledby="post-image-tags">
           <div className="kb-module-head">
             <div>
-              <p className="kb-kicker" id="post-image-tags">Images</p>
-              <strong>Each image can show different glazes</strong>
+              <p className="kb-kicker" id="post-image-tags">Image annotations</p>
+              <strong>Result groups inside each image</strong>
             </div>
             <button type="button" className="kb-quiet-button" onClick={addImageDraft}>
               <ImageIcon size={17} />
@@ -3356,14 +3506,17 @@ function PostComposer({
             {composerImages.length === 0 ? (
               <div className="kb-empty-inline">
                 <ImageIcon size={18} aria-hidden="true" />
-                <span>Add images when a photo needs its own glaze or clay body tags.</span>
+                <span>No images yet</span>
               </div>
             ) : composerImages.map((image) => (
               <div className="kb-image-tag-card" key={image.id}>
                 <div className={`kb-ceramic-thumb ${image.tone}`} />
-                <div>
+                <div className="kb-image-card-body">
                   <div className="kb-image-card-head">
-                    <strong>{image.label}</strong>
+                    <div>
+                      <strong>{image.label}</strong>
+                      <small>{image.annotations.length} result group{image.annotations.length === 1 ? "" : "s"}</small>
+                    </div>
                     {composerImages.length > 1 && (
                       <button
                         type="button"
@@ -3379,82 +3532,146 @@ function PostComposer({
                       </button>
                     )}
                   </div>
-                  <div className="kb-selected-summary compact">
-                    {image.glazeIds.map((glazeId) => {
-                      const glaze = glazes.find((item) => item.id === glazeId);
+                  <div className="kb-image-annotation-list">
+                    {image.annotations.map((annotation) => {
+                      const annotationFiring = firings.find((firing) => firing.id === annotation.firingId);
                       return (
-                        <button
-                          type="button"
-                          className="kb-chip removable image"
-                          key={glazeId}
-                          onClick={() => removeImageGlaze(image.id, glazeId)}
-                        >
-                          {glaze?.name ?? glazeId}
-                          <CircleX size={13} aria-hidden="true" />
-                        </button>
+                        <section className="kb-image-annotation" key={annotation.id}>
+                          <div className="kb-image-annotation-head">
+                            <strong>{annotation.label}</strong>
+                            {image.annotations.length > 1 && (
+                              <button
+                                type="button"
+                                className="kb-icon-button mini"
+                                aria-label={`Remove ${annotation.label}`}
+                                onClick={() => removeImageAnnotation(image.id, annotation.id)}
+                              >
+                                <CircleX size={15} />
+                              </button>
+                            )}
+                          </div>
+                          <label className="kb-select-field">
+                            <span>Firing for this result</span>
+                            <span className="kb-select-wrap">
+                              <select
+                                aria-label={`${annotation.label} firing`}
+                                value={annotation.firingId}
+                                onChange={(event) =>
+                                  updateAnnotationFiring(image.id, annotation.id, event.target.value)
+                                }
+                              >
+                                <option value="">Unknown or unrecorded firing</option>
+                                {firings.map((firing) => (
+                                  <option key={firing.id} value={firing.id}>
+                                    {firing.readableNumber} · {firing.title}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown size={16} aria-hidden="true" />
+                            </span>
+                          </label>
+                          <div className="kb-selected-summary compact">
+                            {annotationFiring && (
+                              <span className="kb-chip record">
+                                <Flame size={13} aria-hidden="true" />
+                                {annotationFiring.readableNumber}
+                              </span>
+                            )}
+                            {annotation.glazeIds.map((glazeId) => {
+                              const glaze = glazes.find((item) => item.id === glazeId);
+                              return (
+                                <button
+                                  type="button"
+                                  className="kb-chip removable image"
+                                  key={glazeId}
+                                  onClick={() => removeAnnotationGlaze(image.id, annotation.id, glazeId)}
+                                >
+                                  {glaze?.name ?? glazeId}
+                                  <CircleX size={13} aria-hidden="true" />
+                                </button>
+                              );
+                            })}
+                            {annotation.clayBodyIds.map((clayBodyId) => {
+                              const clay = clayBodies.find((item) => item.id === clayBodyId);
+                              return (
+                                <button
+                                  type="button"
+                                  className="kb-chip removable image clay"
+                                  key={clayBodyId}
+                                  onClick={() => removeAnnotationClayBody(image.id, annotation.id, clayBodyId)}
+                                >
+                                  {clay?.name ?? clayBodyId}
+                                  <CircleX size={13} aria-hidden="true" />
+                                </button>
+                              );
+                            })}
+                            {!annotationFiring &&
+                              annotation.glazeIds.length === 0 &&
+                              annotation.clayBodyIds.length === 0 && (
+                                <span className="kb-muted-note">Unlinked result group</span>
+                              )}
+                          </div>
+                          <div className="kb-inline-controls">
+                            <InlinePicker
+                              label="Tag result"
+                              icon={Plus}
+                              compact
+                              groups={[
+                                {
+                                  label: "Create record",
+                                  options: [
+                                    {
+                                      label: "New historic firing",
+                                      detail: "Create and tag this result",
+                                      icon: Flame,
+                                      onSelect: () => createAndTagAnnotationFiring(image.id, annotation.id),
+                                    },
+                                    {
+                                      label: "New glaze profile",
+                                      detail: "Create and tag this result",
+                                      icon: Layers3,
+                                      onSelect: () => createAndTagAnnotationGlaze(image.id, annotation.id),
+                                    },
+                                    {
+                                      label: "New clay body profile",
+                                      detail: "Create and tag this result",
+                                      icon: Microscope,
+                                      onSelect: () => createAndTagAnnotationClayBody(image.id, annotation.id),
+                                    },
+                                  ],
+                                },
+                                {
+                                  label: "Glazes",
+                                  options: glazes.map((glaze) => ({
+                                    label: glaze.name,
+                                    detail: glaze.coneRange,
+                                    icon: Layers3,
+                                    onSelect: () => addAnnotationGlaze(image.id, annotation.id, glaze.id),
+                                  })),
+                                },
+                                {
+                                  label: "Clay bodies",
+                                  options: clayBodies.map((clay) => ({
+                                    label: clay.name,
+                                    detail: clay.coneRange,
+                                    icon: Microscope,
+                                    onSelect: () => addAnnotationClayBody(image.id, annotation.id, clay.id),
+                                  })),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </section>
                       );
                     })}
-                    {image.clayBodyIds.map((clayBodyId) => {
-                      const clay = clayBodies.find((item) => item.id === clayBodyId);
-                      return (
-                        <button
-                          type="button"
-                          className="kb-chip removable image clay"
-                          key={clayBodyId}
-                          onClick={() => removeImageClayBody(image.id, clayBodyId)}
-                        >
-                          {clay?.name ?? clayBodyId}
-                          <CircleX size={13} aria-hidden="true" />
-                        </button>
-                      );
-                    })}
-                    {image.glazeIds.length === 0 && image.clayBodyIds.length === 0 && (
-                      <span className="kb-muted-note">No image tags yet</span>
-                    )}
-                  </div>
-                  <div className="kb-inline-controls">
-                    <InlinePicker
-                      label="Tag glaze or clay"
-                      icon={Plus}
-                      compact
-                      groups={[
-                        {
-                          label: "Create profile",
-                          options: [
-                            {
-                              label: "New glaze profile",
-                              detail: "Create and tag this image",
-                              icon: Layers3,
-                              onSelect: () => createAndTagImageGlaze(image.id),
-                            },
-                            {
-                              label: "New clay body profile",
-                              detail: "Create and tag this image",
-                              icon: Microscope,
-                              onSelect: () => createAndTagImageClayBody(image.id),
-                            },
-                          ],
-                        },
-                        {
-                          label: "Glazes",
-                          options: glazes.map((glaze) => ({
-                            label: glaze.name,
-                            detail: glaze.coneRange,
-                            icon: Layers3,
-                            onSelect: () => addImageGlaze(image.id, glaze.id),
-                          })),
-                        },
-                        {
-                          label: "Clay bodies",
-                          options: clayBodies.map((clay) => ({
-                            label: clay.name,
-                            detail: clay.coneRange,
-                            icon: Microscope,
-                            onSelect: () => addImageClayBody(image.id, clay.id),
-                          })),
-                        },
-                      ]}
-                    />
+                    <button
+                      type="button"
+                      className="kb-quiet-button kb-add-group-button"
+                      onClick={() => addImageAnnotation(image.id)}
+                    >
+                      <Plus size={16} />
+                      <span>Add result group</span>
+                    </button>
                   </div>
                 </div>
               </div>

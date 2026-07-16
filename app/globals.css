@@ -1179,6 +1179,54 @@ button:disabled {
   padding: 0.58rem;
 }
 
+.kb-image-card-body,
+.kb-image-annotation-list {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.kb-image-card-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.kb-image-card-head small {
+  color: var(--kb-muted);
+  font-size: 0.72rem;
+}
+
+.kb-image-annotation {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid var(--kb-line);
+  padding-top: 0.55rem;
+}
+
+.kb-image-annotation:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.kb-image-annotation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.kb-image-annotation-head strong {
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.kb-add-group-button {
+  justify-self: start;
+}
+
 .kb-ceramic-thumb {
   width: 3.55rem;
   aspect-ratio: 1;
@@ -3129,6 +3177,12 @@ button:disabled {
 
   .kb-image-tag-card {
     grid-template-columns: 3.4rem minmax(0, 1fr);
+  }
+
+  .kb-image-annotation .kb-select-wrap,
+  .kb-image-annotation .kb-picker,
+  .kb-add-group-button {
+    width: 100%;
   }
 
   .kb-ceramic-thumb {
