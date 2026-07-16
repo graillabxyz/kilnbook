@@ -2,7 +2,7 @@ export type ID = string;
 
 export type Visibility = "private" | "followers" | "studio" | "public";
 
-export type UserPlan = "free" | "professional" | "studio";
+export type UserPlan = "free" | "professional" | "business" | "studio";
 
 export type AuthProvider = "email" | "google" | "magic_link" | "sso" | "unknown";
 
@@ -14,6 +14,25 @@ export type ProfileType =
   | "collective"
   | "supplier"
   | "custom";
+
+export interface BusinessProfile {
+  businessName: string;
+  logoUrl?: string;
+  description: string;
+  websiteUrl?: string;
+  instagram?: string;
+  etsy?: string;
+  shopify?: string;
+  facebook?: string;
+  youtube?: string;
+  googleMapsUrl?: string;
+  businessHours?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  publicStudioAddress?: string;
+  servicesOffered: string[];
+  portfolioHeroImageColor?: string;
+}
 
 export type TemperatureUnit = "c" | "f";
 export type WeightUnit = "g" | "kg" | "oz" | "lb";
@@ -131,6 +150,7 @@ export interface Profile {
   preferredWindSpeedUnit: WindSpeedUnit;
   profileVisibility: Visibility;
   subscriptionTier: UserPlan;
+  businessProfile?: BusinessProfile;
   onboardingComplete: boolean;
 }
 

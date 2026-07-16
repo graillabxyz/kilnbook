@@ -49,6 +49,28 @@ test("starter preview files and dependency are removed", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
+test("PWA install metadata and service worker are present", async () => {
+  const [layout, register, manifestRaw, serviceWorker] = await Promise.all([
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/pwa-register.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"),
+    readFile(new URL("../public/sw.js", import.meta.url), "utf8"),
+  ]);
+  const manifest = JSON.parse(manifestRaw);
+
+  assert.match(layout, /rel="manifest"/);
+  assert.match(layout, /apple-touch-icon/);
+  assert.match(register, /serviceWorker/);
+  assert.equal(manifest.name, "Flux and Fire");
+  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.start_url, "/?source=pwa");
+  assert.equal(manifest.theme_color, "#a34324");
+  assert.ok(manifest.icons.some((icon) => icon.sizes === "192x192" && icon.type === "image/png"));
+  assert.ok(manifest.icons.some((icon) => icon.sizes === "512x512" && icon.type === "image/png"));
+  assert.match(serviceWorker, /addEventListener\("fetch"/);
+  assert.match(serviceWorker, /CACHE_NAME/);
+});
+
 test("brand system is documented and wired into the app", async () => {
   const [brandDoc, globals, layout, workspace, brandConstants] = await Promise.all([
     readFile(new URL("../docs/brand.md", import.meta.url), "utf8"),
@@ -76,4 +98,25 @@ test("brand system is documented and wired into the app", async () => {
   assert.match(workspace, /BRAND_ASSETS/);
   assert.match(workspace, /BRAND_CHART_COLORS/);
   assert.match(brandConstants, /BRAND_PROFILE_COLORS/);
+});
+
+test("mobile add and navigation follow the simplified Instagram-style order", async () => {
+  const [workspace, product, globals] = await Promise.all([
+    readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/product.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(product, /"Home",\n  "Explore",\n  "Add",\n  "Search",\n  "Profile"/);
+  assert.match(workspace, /onConfirm\(option\.kind, "public"\)/);
+  assert.match(workspace, /MOBILE_SCROLL_VIEWS = new Set<View>\(\["Home", "Explore", "Profile", "Settings"\]\)/);
+  assert.match(workspace, /const items: MobileNavItem\[\] = \[\n    \{ label: "Home"/);
+  assert.match(workspace, /\{ label: "Add", icon: Plus, action: "add" \},\n    \{ label: "Search"/);
+  assert.match(globals, /grid-template-columns: repeat\(5, 20%\)/);
+  assert.match(globals, /\.kb-main-scrollable > :not\(\.kb-header\)/);
+  assert.match(globals, /overflow-y: auto/);
+  assert.match(globals, /\.kb-main-contained > :not\(\.kb-header\)/);
+  assert.match(globals, /overflow: hidden/);
+  assert.match(globals, /\.kb-mobile-nav button\.compose svg/);
+  assert.match(globals, /\.kb-add-mobile-list/);
 });

@@ -1,0 +1,59 @@
+{
+  "id": "/",
+  "name": "Flux and Fire",
+  "short_name": "Flux & Fire",
+  "description": "A ceramic firing journal, glaze library, studio dashboard, and community feed.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff8ef",
+  "theme_color": "#a34324",
+  "categories": ["productivity", "education", "lifestyle"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add glaze result",
+      "short_name": "Result",
+      "description": "Open Flux and Fire ready to add a glaze result.",
+      "url": "/?add=glaze_result",
+      "icons": [
+        {
+          "src": "/pwa-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Start live firing",
+      "short_name": "Firing",
+      "description": "Open Flux and Fire ready to track a live firing.",
+      "url": "/?add=live_firing",
+      "icons": [
+        {
+          "src": "/pwa-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

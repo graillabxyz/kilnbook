@@ -1,9 +1,89 @@
+-- Add the launch-period Business tier and public business profile metadata.
+-- Free remains the generous default; Business adds professional portfolio,
+-- directory, inventory, analytics, cost, export, and notification surfaces.
+
+alter table public.profiles
+  drop constraint if exists profiles_subscription_tier_check;
+
+alter table public.profiles
+  add constraint profiles_subscription_tier_check
+  check (subscription_tier in ('free', 'professional', 'business', 'studio'));
+
+create table if not exists public.business_profiles (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  business_name text not null,
+  logo_url text,
+  description text not null default '',
+  website_url text,
+  instagram text,
+  etsy text,
+  shopify text,
+  facebook text,
+  youtube text,
+  google_maps_url text,
+  business_hours text,
+  contact_email text,
+  contact_phone text,
+  public_studio_address text,
+  services_offered text[] not null default '{}',
+  portfolio_hero_image_id uuid references public.images (id) on delete set null,
+  portfolio_hero_image_color text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists business_profiles_business_name_idx
+  on public.business_profiles (business_name);
+
+create index if not exists business_profiles_services_idx
+  on public.business_profiles using gin (services_offered);
+
+alter table public.business_profiles enable row level security;
+
+grant select on table public.business_profiles to anon, authenticated;
+grant insert, update, delete on table public.business_profiles to authenticated;
+grant select, insert, update, delete on table public.business_profiles to service_role;
+
+drop policy if exists "business profiles visible by profile visibility" on public.business_profiles;
+create policy "business profiles visible by profile visibility" on public.business_profiles
+  for select
+  to anon, authenticated
+  using (
+    exists (
+      select 1
+      from public.profiles
+      where profiles.id = business_profiles.profile_id
+        and public.can_view_owned_visibility(profiles.id, null, profiles.visibility)
+    )
+  );
+
+drop policy if exists "business profiles self insert" on public.business_profiles;
+create policy "business profiles self insert" on public.business_profiles
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = profile_id);
+
+drop policy if exists "business profiles self update" on public.business_profiles;
+create policy "business profiles self update" on public.business_profiles
+  for update
+  to authenticated
+  using ((select auth.uid()) = profile_id)
+  with check ((select auth.uid()) = profile_id);
+
+drop policy if exists "business profiles self delete" on public.business_profiles;
+create policy "business profiles self delete" on public.business_profiles
+  for delete
+  to authenticated
+  using ((select auth.uid()) = profile_id);
+
 insert into public.subscription_plans (id, name, description) values
   ('free', 'Free', 'Core firing journal, libraries, basic charts, community browsing, posting, following, comments, and limited messaging.'),
   ('professional', 'Professional legacy', 'Legacy professional label kept for existing accounts while Business becomes the launch upgrade path.'),
   ('business', 'Business', 'Free during the 2026 initial release period; 2027 price is 4.99 USD per month. Adds public business profiles, directory priority, portfolio, studio analytics, cost tracking, inventory, exports, and business reminders.'),
   ('studio', 'Studio', 'Future multi-member studios, shared records, roles, approvals, and studio analytics.')
-on conflict (id) do update set name = excluded.name, description = excluded.description;
+on conflict (id) do update set
+  name = excluded.name,
+  description = excluded.description;
 
 insert into public.entitlements (id, minimum_plan, monthly_limit, description) values
   ('unlimited_personal_firings', 'free', null, 'Unlimited personal firing records subject to anti-abuse policies.'),
@@ -33,12 +113,3 @@ on conflict (id) do update set
   minimum_plan = excluded.minimum_plan,
   monthly_limit = excluded.monthly_limit,
   description = excluded.description;
-
-insert into public.ceramic_materials (name, category, notes) values
-  ('Custer Feldspar', 'flux', 'Common potassium feldspar in cone 6-10 glazes.'),
-  ('Silica 325 mesh', 'silica', 'Fine silica for glass former adjustments.'),
-  ('EPK Kaolin', 'clay', 'Kaolin used for alumina and suspension.'),
-  ('Whiting', 'flux', 'Calcium carbonate source.'),
-  ('Red Iron Oxide', 'colorant', 'Iron colorant for tenmoku and celadon work.'),
-  ('Rutile', 'colorant', 'Titanium-bearing colorant for variegation.')
-on conflict (name) do nothing;

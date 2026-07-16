@@ -73,6 +73,7 @@ import {
   signOutOfSupabase,
 } from "@/lib/supabase/client";
 import { profileFromSupabaseUser } from "@/lib/supabase/auth-profile";
+import { BUSINESS_LAUNCH_OFFER, formatPlanLabel } from "@/lib/subscriptions";
 import { formatTemperature } from "@/lib/units";
 
 type View = PrimaryNavigationItem | "Library";
@@ -91,6 +92,13 @@ type AddDraft = {
   detail: string;
   createdAt: string;
 };
+
+type MobileNavItem =
+  | { label: "Home" | "Explore" | "Profile"; view: View; icon: LucideIcon }
+  | { label: "Add"; icon: LucideIcon; action: "add" }
+  | { label: "Search"; icon: LucideIcon; action: "search" };
+
+const MOBILE_SCROLL_VIEWS = new Set<View>(["Home", "Explore", "Profile", "Settings"]);
 
 const firingFormSchema = z.object({
   title: z.string().min(3, "Give the firing a clear title."),
@@ -428,11 +436,17 @@ export function KilnbookWorkspace({
     setAddChooserOpen(false);
   };
 
+  const mainClassName = [
+    "kb-main",
+    view === "Home" ? "kb-main-home" : "",
+    MOBILE_SCROLL_VIEWS.has(view) ? "kb-main-scrollable" : "kb-main-contained",
+  ].filter(Boolean).join(" ");
+
   return (
-    <main className="min-h-screen bg-[var(--kb-bg)] text-[var(--kb-ink)]">
+    <main className="kb-app-root min-h-screen bg-[var(--kb-bg)] text-[var(--kb-ink)]">
       <div className="kb-shell">
         <Sidebar view={view} onViewChange={setView} />
-        <section className={view === "Home" ? "kb-main kb-main-home" : "kb-main"}>
+        <section className={mainClassName}>
           <Header
             viewerName={viewer.displayName}
             view={view}
@@ -513,6 +527,7 @@ export function KilnbookWorkspace({
           {view === "Explore" && (
             <ExploreScreen
               query={query}
+              profiles={snapshot.profiles}
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
               posts={snapshot.posts}
@@ -549,7 +564,12 @@ export function KilnbookWorkspace({
           )}
         </section>
       </div>
-      <MobileNav view={view} onViewChange={setView} onAdd={() => setAddChooserOpen(true)} />
+      <MobileNav
+        view={view}
+        onViewChange={setView}
+        onAdd={() => setAddChooserOpen(true)}
+        onSearch={() => setView("Explore")}
+      />
       {addChooserOpen && (
         <AddChooser
           onClose={() => setAddChooserOpen(false)}
@@ -770,6 +790,21 @@ function AddChooser({
           <button type="button" className="kb-icon-button" aria-label="Close add chooser" onClick={onClose}>
             <CircleX size={18} />
           </button>
+        </div>
+        <div className="kb-add-mobile-list">
+          {addOptions.map((option) => {
+            const Icon = option.icon;
+            return (
+              <button
+                type="button"
+                key={option.kind}
+                onClick={() => onConfirm(option.kind, "public")}
+              >
+                <Icon size={20} />
+                <strong>{option.title}</strong>
+              </button>
+            );
+          })}
         </div>
         <div className="kb-add-option-grid">
           {addOptions.map((option) => {
@@ -2247,12 +2282,14 @@ function KilnsScreen({
 
 function ExploreScreen({
   query,
+  profiles,
   glazes,
   clayBodies,
   posts,
   firings,
 }: {
   query: string;
+  profiles: Profile[];
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
   posts: Post[];
@@ -2265,9 +2302,60 @@ function ExploreScreen({
       glaze.name.toLowerCase().includes(normalizedQuery) ||
       glaze.surface.toLowerCase().includes(normalizedQuery),
   );
+  const businessProfiles = profiles.filter((profile) => profile.subscriptionTier === "business");
 
   return (
     <div className="kb-stack">
+      <section className="kb-panel">
+        <div className="kb-section-title">
+          <div>
+            <p className="kb-kicker">Business directory</p>
+            <h2>Studios, teachers, production potters, and kiln services</h2>
+          </div>
+          <div className="kb-chip-row">
+            <span className="kb-chip">Businesses</span>
+            <span className="kb-chip">Teachers</span>
+            <span className="kb-chip">Production potters</span>
+            <span className="kb-chip">Kiln rentals</span>
+            <span className="kb-chip">Workshop hosts</span>
+          </div>
+        </div>
+        <div className="kb-explore-grid">
+          {businessProfiles.map((profile) => {
+            const business = profile.businessProfile;
+            return (
+              <article className="kb-public-card kb-business-card" key={profile.id}>
+                <div
+                  className="kb-hero-swatch"
+                  style={{ background: business?.portfolioHeroImageColor ?? profile.avatarColor }}
+                />
+                <div className="kb-module-head">
+                  <h3>{business?.businessName ?? profile.displayName}</h3>
+                  <BusinessBadge />
+                </div>
+                <p>{business?.description ?? profile.biography}</p>
+                <div className="kb-chip-row">
+                  {(business?.servicesOffered ?? profile.specialties).slice(0, 4).map((service) => (
+                    <span className="kb-chip" key={service}>{service}</span>
+                  ))}
+                </div>
+                <div className="kb-business-actions">
+                  {business?.websiteUrl && (
+                    <a className="kb-quiet-button" href={business.websiteUrl}>
+                      Visit Website
+                    </a>
+                  )}
+                  {business?.googleMapsUrl && (
+                    <a className="kb-quiet-button" href={business.googleMapsUrl}>
+                      Directions
+                    </a>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
       <section className="kb-panel">
         <div className="kb-section-title">
           <div>
@@ -2420,12 +2508,14 @@ function AnalyticsScreen({
   glazes,
   clayBodies,
 }: {
-  plan: "free" | "professional" | "studio";
+  plan: Profile["subscriptionTier"];
   firings: FiringRecord[];
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
 }) {
   const advanced = getEntitlementDecision(plan, "advanced_firing_analytics");
+  const costTracking = getEntitlementDecision(plan, "cost_tracking");
+  const inventory = getEntitlementDecision(plan, "material_inventory");
   return (
     <div className="kb-stack">
       <section className="kb-panel">
@@ -2434,12 +2524,13 @@ function AnalyticsScreen({
             <p className="kb-kicker">Analytics</p>
             <h2>Understand patterns without overstating causation</h2>
           </div>
-          <EntitlementBadge allowed={advanced.allowed} label={advanced.allowed ? "Professional" : "Preview"} />
+          <EntitlementBadge allowed={advanced.allowed} label={advanced.allowed ? "Business" : "Business preview"} />
         </div>
         <div className="kb-metrics">
           <MetricCard label="Average cooling" value="16.8 h" detail="Cone 6-10 completed firings" icon={CloudSun} />
           <MetricCard label="Glaze fit checks" value={String(glazes.length + clayBodies.length)} detail="Clay/glaze combinations" icon={Microscope} />
-          <MetricCard label="Consistency" value="86" detail={advanced.allowed ? "Saved dashboard" : "Professional preview"} icon={Activity} />
+          <MetricCard label="Consistency" value="86" detail={advanced.allowed ? "Saved dashboard" : "Business preview"} icon={Activity} />
+          <MetricCard label="Firing cost range" value="$34-48" detail={costTracking.allowed ? "Per cone 10 load" : "Business cost preview"} icon={Gauge} />
         </div>
       </section>
       <section className="kb-grid-two equal">
@@ -2451,6 +2542,11 @@ function AnalyticsScreen({
           <p className="kb-correlation">
             Pinholing appeared more frequently in firings with shorter holds. The app does not claim the hold length caused the defect.
           </p>
+          <div className="kb-settings-list">
+            <SettingRow title="Advanced insight" body="This firing took 11% longer than comparable cone 10 reduction firings." />
+            <SettingRow title="Careful wording" body="Outdoor temperature may have contributed to slower cooling; this is a correlation, not a certainty." />
+            <SettingRow title="Kiln trend" body="Element performance may be declining compared with the previous six-month pattern." />
+          </div>
         </div>
         <div className="kb-panel">
           <div className="kb-section-title compact">
@@ -2474,6 +2570,30 @@ function AnalyticsScreen({
           </div>
         </div>
       </section>
+      <section className="kb-grid-two equal">
+        <div className="kb-panel">
+          <div className="kb-section-title compact">
+            <h3>Business operations</h3>
+            <EntitlementBadge allowed={costTracking.allowed} label={costTracking.allowed ? "Business" : "Business preview"} />
+          </div>
+          <div className="kb-settings-list">
+            <SettingRow title="Monthly kiln operating cost" body="$180-240 estimated from fuel, elements, maintenance, and depreciation." />
+            <SettingRow title="Estimated cost per piece" body="$2.80-4.10 across production mugs in similar loads." />
+            <SettingRow title="Advanced exports" body="CSV, PDF firing reports, inventory reports, financial summaries, and JSON backups." />
+          </div>
+        </div>
+        <div className="kb-panel">
+          <div className="kb-section-title compact">
+            <h3>Inventory and image library</h3>
+            <EntitlementBadge allowed={inventory.allowed} label={inventory.allowed ? "Business" : "Business preview"} />
+          </div>
+          <div className="kb-settings-list">
+            <SettingRow title="Material inventory" body="Silica has approximately 3 batches remaining for Quiet Tenmoku v3." />
+            <SettingRow title="Kiln inventory" body="Track shelves, posts, cones, thermocouples, elements, burners, and maintenance history." />
+            <SettingRow title="Advanced image search" body="Filter by glaze, clay body, firing, cone, temperature, kiln position, atmosphere, year, piece type, and defect." />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2490,6 +2610,7 @@ function ProfileScreen({
   onOpenSettings: () => void;
 }) {
   const profileIdentity = viewer.identityLabel ?? formatProfileType(viewer.profileType);
+  const business = viewer.businessProfile;
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -2509,9 +2630,35 @@ function ProfileScreen({
             <h2>{viewer.displayName}</h2>
             <span>@{viewer.username} · {viewer.locationLabel}</span>
           </div>
+          {viewer.subscriptionTier === "business" && <BusinessBadge />}
           <VisibilityPill visibility={viewer.profileVisibility} />
         </div>
         <p>{viewer.biography}</p>
+        {business && (
+          <section className="kb-business-profile">
+            <div
+              className="kb-business-hero"
+              style={{ background: business.portfolioHeroImageColor ?? viewer.avatarColor }}
+            />
+            <div>
+              <p className="kb-kicker">Business profile</p>
+              <h3>{business.businessName}</h3>
+              <p>{business.description}</p>
+              <div className="kb-business-actions">
+                {business.websiteUrl && (
+                  <a className="kb-primary-button" href={business.websiteUrl}>
+                    Visit Website
+                  </a>
+                )}
+                {business.googleMapsUrl && (
+                  <a className="kb-quiet-button" href={business.googleMapsUrl}>
+                    Directions
+                  </a>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
         <div className="kb-profile-hierarchy" aria-label="Profile hierarchy">
           <span>
             <strong>Profile</strong>
@@ -2530,6 +2677,15 @@ function ProfileScreen({
             <small>{viewer.authProvider === "google" ? "Google OAuth" : "Supabase Auth"}</small>
           </span>
         </div>
+        {business && (
+          <div className="kb-settings-list">
+            <SettingRow title="Business hours" body={business.businessHours ?? "Hours not published yet."} />
+            <SettingRow title="Contact email" body={business.contactEmail ?? viewer.email ?? "Contact email private."} />
+            <SettingRow title="Contact phone" body={business.contactPhone ?? "Phone not published."} />
+            <SettingRow title="Studio address" body={business.publicStudioAddress ?? "Address private."} />
+            <SettingRow title="Social and shop links" body={[business.instagram, business.etsy, business.shopify, business.facebook, business.youtube].filter(Boolean).join(" / ") || "No public shop links yet."} />
+          </div>
+        )}
         <div className="kb-chip-row">
           <span className="kb-chip record">{profileIdentity}</span>
           <span className="kb-chip">{viewer.emailVerified ? "verified email" : "email pending"}</span>
@@ -2564,6 +2720,9 @@ function SettingsScreen({ viewer }: { viewer: Profile }) {
   const plan = viewer.subscriptionTier;
   const messaging = getEntitlementDecision(plan, "limited_messaging");
   const privateHistory = getEntitlementDecision(plan, "private_recipe_history");
+  const businessProfile = getEntitlementDecision(plan, "business_profile");
+  const costTracking = getEntitlementDecision(plan, "cost_tracking");
+  const advancedExport = getEntitlementDecision(plan, "advanced_export");
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -2587,12 +2746,16 @@ function SettingsScreen({ viewer }: { viewer: Profile }) {
       <aside className="kb-panel">
         <div className="kb-section-title compact">
           <h3>Subscription</h3>
-          <EntitlementBadge allowed label={plan} />
+          <EntitlementBadge allowed label={formatPlanLabel(plan)} />
         </div>
+        <BusinessLaunchCard active={businessProfile.allowed} />
         <div className="kb-settings-list">
           <SettingRow title="Monthly conversation requests" body={`${messaging.limit ?? "Unlimited"} new requests available on this plan.`} />
           <SettingRow title="Recipe version history" body={privateHistory.allowed ? "Private recipe history is active." : privateHistory.reason} />
-          <SettingRow title="Exports" body="Basic CSV and JSON backup included; PDF reports are professional." />
+          <SettingRow title="Free plan promise" body="Firings, glazes, clay bodies, images, posting, following, comments, and community browsing stay available on Free." />
+          <SettingRow title="Business profile" body={businessProfile.allowed ? "Public business profile, portfolio links, services, contact, and directory placement are active." : businessProfile.reason} />
+          <SettingRow title="Cost tracking" body={costTracking.allowed ? "Fuel, labor, maintenance, depreciation, and per-piece cost tools are active." : costTracking.reason} />
+          <SettingRow title="Exports" body={advancedExport.allowed ? "CSV, PDF reports, inventory reports, financial summaries, and JSON backups are active." : "Basic CSV and JSON backup included; PDF reports and financial summaries are Business."} />
         </div>
       </aside>
     </div>
@@ -2841,12 +3004,49 @@ function VisibilityPill({ visibility }: { visibility: Visibility }) {
   );
 }
 
+function BusinessBadge() {
+  return (
+    <span className="kb-business-badge">
+      <ShieldCheck size={14} aria-hidden="true" />
+      Business
+    </span>
+  );
+}
+
 function EntitlementBadge({ allowed, label }: { allowed: boolean; label: string }) {
   return (
     <span className={allowed ? "kb-entitlement allowed" : "kb-entitlement preview"}>
       {allowed ? <CheckCircle2 size={14} /> : <LockKeyhole size={14} />}
       {label}
     </span>
+  );
+}
+
+function BusinessLaunchCard({ active }: { active: boolean }) {
+  const [launchActive, setLaunchActive] = useState(active);
+  const price = `$${BUSINESS_LAUNCH_OFFER.monthlyPriceUsd.toFixed(2)}/month`;
+  return (
+    <div className="kb-plan-card">
+      <span className="kb-kicker">Business launch offer</span>
+      <strong>Professional ceramics tools are free during the 2026 initial release.</strong>
+      <div className="kb-price-line" aria-label={`Business price ${price} crossed out, free in ${BUSINESS_LAUNCH_OFFER.releaseYear}`}>
+        <s>{price}</s>
+        <b>Free in {BUSINESS_LAUNCH_OFFER.releaseYear}</b>
+      </div>
+      <p>
+        Starting in {BUSINESS_LAUNCH_OFFER.futureYear}, Business will be {price}. Upgrade now to use
+        directory, portfolio, analytics, inventory, cost tracking, exports, and reminders during launch.
+      </p>
+      <button
+        type="button"
+        className="kb-primary-button full"
+        aria-pressed={launchActive}
+        disabled={launchActive}
+        onClick={() => setLaunchActive(true)}
+      >
+        {launchActive ? "Business active during initial release" : "Upgrade to Business for free"}
+      </button>
+    </div>
   );
 }
 
@@ -2863,30 +3063,42 @@ function MobileNav({
   view,
   onViewChange,
   onAdd,
+  onSearch,
 }: {
   view: View;
   onViewChange: (view: View) => void;
   onAdd: () => void;
+  onSearch: () => void;
 }) {
-  const items: Array<{ label: string; view: View; icon: LucideIcon; compose?: boolean }> = [
+  const items: MobileNavItem[] = [
     { label: "Home", view: "Home", icon: BookOpen },
     { label: "Explore", view: "Explore", icon: Search },
-    { label: "Add", view: "Firings", icon: Plus, compose: true },
+    { label: "Add", icon: Plus, action: "add" },
+    { label: "Search", icon: Search, action: "search" },
     { label: "Profile", view: "Profile", icon: UserRound },
   ];
   return (
     <nav className="kb-mobile-nav" aria-label="Mobile navigation">
       {items.map((item) => {
         const Icon = item.icon;
+        const active = "view" in item && view === item.view;
+        const compose = "action" in item && item.action === "add";
         return (
           <button
             type="button"
             key={item.label}
             className={[
-              view === item.view && !item.compose ? "active" : "",
-              item.compose ? "compose" : "",
+              active ? "active" : "",
+              compose ? "compose" : "",
             ].filter(Boolean).join(" ")}
-            onClick={() => (item.compose ? onAdd() : onViewChange(item.view))}
+            onClick={() => {
+              if ("action" in item) {
+                if (item.action === "add") onAdd();
+                else onSearch();
+                return;
+              }
+              onViewChange(item.view);
+            }}
           >
             <Icon size={20} />
             <span>{item.label}</span>

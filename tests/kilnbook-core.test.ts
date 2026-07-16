@@ -6,6 +6,7 @@ import { rankPopularPosts, scorePopularPost } from "../lib/feed-ranking";
 import { canViewRecord } from "../lib/privacy";
 import { calculateRecipeTotalPercentage, recipesLikelyDuplicate, scaleRecipe } from "../lib/recipe";
 import { firingLogPoints, firings, glazeRecipeVersions, posts } from "../lib/seed-data";
+import { BUSINESS_LAUNCH_OFFER, formatPlanLabel } from "../lib/subscriptions";
 import {
   celsiusToFahrenheit,
   convertWeight,
@@ -84,7 +85,17 @@ test("entitlement decisions are centralized", () => {
   assert.equal(getEntitlementDecision("free", "basic_firing_curves").allowed, true);
   const advanced = getEntitlementDecision("free", "advanced_firing_analytics");
   assert.equal(advanced.allowed, false);
-  assert.equal(advanced.planRequired, "professional");
+  assert.equal(advanced.planRequired, "business");
+  assert.equal(getEntitlementDecision("business", "cost_tracking").allowed, true);
+  assert.equal(getEntitlementDecision("business", "material_inventory").allowed, true);
+  assert.equal(getEntitlementDecision("professional", "advanced_export").allowed, false);
+});
+
+test("business launch offer preserves 2026 free upgrade and 2027 price", () => {
+  assert.equal(formatPlanLabel("business"), "Business");
+  assert.equal(BUSINESS_LAUNCH_OFFER.releaseYear, 2026);
+  assert.equal(BUSINESS_LAUNCH_OFFER.futureYear, 2027);
+  assert.equal(BUSINESS_LAUNCH_OFFER.monthlyPriceUsd, 4.99);
 });
 
 test("popular feed ranking decays old engagement", () => {
@@ -113,4 +124,3 @@ test("privacy rules prevent accidental private record exposure", () => {
     true,
   );
 });
-

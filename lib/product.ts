@@ -24,7 +24,7 @@ export const MOBILE_NAVIGATION = [
   "Home",
   "Explore",
   "Add",
-  "Library",
+  "Search",
   "Profile",
 ] as const;
 

@@ -437,6 +437,10 @@ button:disabled {
   gap: 0.55rem;
 }
 
+.kb-add-mobile-list {
+  display: none;
+}
+
 .kb-add-option-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1245,6 +1249,20 @@ button:disabled {
   padding: 0.75rem;
 }
 
+.kb-business-card {
+  align-content: start;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 239, 0.78), rgba(255, 255, 255, 0.55)),
+    var(--kb-surface-strong);
+}
+
+.kb-business-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+
 .kb-library-card {
   min-height: 10rem;
 }
@@ -1299,6 +1317,71 @@ button:disabled {
 .kb-settings-list {
   display: grid;
   gap: 0.5rem;
+}
+
+.kb-plan-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(163, 67, 36, 0.2);
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--kb-ivory), #ffffff 72%);
+}
+
+.kb-plan-card strong {
+  font-family: var(--font-brand);
+  font-size: 1.28rem;
+  font-weight: 600;
+  line-height: 1.08;
+}
+
+.kb-plan-card p {
+  margin: 0;
+  color: var(--kb-muted);
+  font-size: 0.86rem;
+}
+
+.kb-price-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.kb-price-line s {
+  color: var(--kb-muted);
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--kb-terracotta);
+}
+
+.kb-price-line b {
+  color: var(--kb-terracotta);
+  font-size: 1.05rem;
+}
+
+.kb-business-profile {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.42fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: stretch;
+  padding: 0.75rem;
+  border: 1px solid rgba(49, 93, 103, 0.18);
+  border-radius: 8px;
+  background: var(--kb-warm-highlight);
+}
+
+.kb-business-profile h3,
+.kb-business-profile p {
+  margin: 0;
+}
+
+.kb-business-hero {
+  min-height: 9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 -28px 45px rgba(33, 29, 26, 0.14);
 }
 
 .kb-comparison-list progress {
@@ -1529,7 +1612,8 @@ button:disabled {
 }
 
 .kb-visibility,
-.kb-entitlement {
+.kb-entitlement,
+.kb-business-badge {
   min-height: 1.85rem;
   display: inline-flex;
   align-items: center;
@@ -1539,6 +1623,11 @@ button:disabled {
   font-size: 0.76rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.kb-business-badge {
+  color: #6d3d31;
+  background: var(--kb-terracotta-soft);
 }
 
 .kb-visibility.public,
@@ -1604,8 +1693,22 @@ button:disabled {
 @media (max-width: 760px) {
   html,
   body {
+    height: 100%;
     max-width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
     overflow-x: hidden;
+  }
+
+  .kb-app-root,
+  .kb-shell {
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .kb-shell {
@@ -1617,11 +1720,31 @@ button:disabled {
   }
 
   .kb-main {
-    padding: 0.85rem 0.85rem 5.6rem;
+    height: 100dvh;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    padding: 0.85rem 0.85rem calc(5.6rem + env(safe-area-inset-bottom));
   }
 
   .kb-main-home {
-    padding: 0 0 5.4rem;
+    padding: 0 0 calc(5.4rem + env(safe-area-inset-bottom));
+  }
+
+  .kb-main > :not(.kb-header) {
+    min-height: 0;
+  }
+
+  .kb-main-scrollable > :not(.kb-header) {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.9rem;
+  }
+
+  .kb-main-contained > :not(.kb-header) {
+    overflow: hidden;
   }
 
   .kb-header {
@@ -1709,19 +1832,51 @@ button:disabled {
     max-width: 16rem;
   }
 
+  .kb-add-mobile-list {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .kb-add-mobile-list button {
+    min-height: 4.2rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid var(--kb-line);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.78);
+    color: var(--kb-ink);
+    padding: 0 0.85rem;
+    text-align: left;
+  }
+
+  .kb-add-mobile-list svg {
+    color: var(--kb-terracotta);
+  }
+
+  .kb-add-mobile-list strong {
+    font-family: var(--font-brand);
+    font-size: 1.28rem;
+    font-weight: 600;
+    line-height: 1.05;
+  }
+
   .kb-add-option-grid,
   .kb-add-visibility-grid {
     grid-template-columns: 1fr;
   }
 
+  .kb-add-option-grid,
+  .kb-add-privacy,
+  .kb-add-summary,
+  .kb-add-actions {
+    display: none;
+  }
+
   .kb-add-option,
   .kb-add-visibility-grid button {
     min-height: auto;
-  }
-
-  .kb-add-actions {
-    display: grid;
-    grid-template-columns: 1fr;
   }
 
   .kb-add-actions .kb-primary-button,
@@ -1755,6 +1910,14 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .kb-business-profile {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-business-hero {
+    min-height: 7.4rem;
+  }
+
   .kb-home-grid {
     display: block;
   }
@@ -1773,7 +1936,7 @@ button:disabled {
 
   .kb-feed-panel > .kb-section-title {
     position: sticky;
-    top: 4.2rem;
+    top: 0;
     z-index: 8;
     display: flex;
     justify-content: center;
@@ -1903,9 +2066,9 @@ button:disabled {
     z-index: 10;
     width: 100vw;
     max-width: 100vw;
-    min-height: 4.7rem;
+    min-height: 5.15rem;
     display: grid;
-    grid-template-columns: repeat(4, 25%);
+    grid-template-columns: repeat(5, 20%);
     gap: 0;
     border-top: 1px solid var(--kb-line);
     background: rgba(255, 253, 249, 0.96);
@@ -1919,7 +2082,7 @@ button:disabled {
     min-width: 0;
     width: 100%;
     max-width: 100%;
-    min-height: 3.6rem;
+    min-height: 3.75rem;
     border-radius: 7px;
     display: grid;
     place-items: center;
@@ -1936,17 +2099,20 @@ button:disabled {
   }
 
   .kb-mobile-nav button.compose svg {
-    width: 2.35rem;
-    height: 2.35rem;
+    width: 3.25rem;
+    height: 3.25rem;
     border-radius: 8px;
-    padding: 0.48rem;
+    padding: 0.62rem;
     background: var(--kb-terracotta);
     color: #fffdf9;
-    box-shadow: 0 8px 18px rgba(163, 67, 36, 0.24);
+    box-shadow: 0 12px 26px rgba(163, 67, 36, 0.3);
+    transform: translateY(-0.35rem);
   }
 
   .kb-mobile-nav button.compose span {
+    margin-top: -0.42rem;
     color: var(--kb-terracotta);
+    font-size: 0.72rem;
   }
 }
 

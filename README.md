@@ -12,6 +12,7 @@ Flux and Fire is a production-oriented web application scaffold for ceramic arti
 - Zod
 - Recharts
 - Supabase PostgreSQL/Auth/Storage/Realtime migration artifacts
+- Installable PWA manifest, service worker, and mobile app icons
 - Centralized entitlement, privacy, unit conversion, recipe, feed-ranking, and firing-estimate services
 
 ## Local Development
@@ -29,17 +30,21 @@ The local preview uses realistic ceramic seed data through `lib/services/kilnboo
 npm test
 ```
 
-The test command builds the app, runs Phase 1 business-rule tests, and verifies the rendered HTML no longer contains starter preview code.
+The test command builds the app, runs Phase 1 business-rule tests, and verifies rendered HTML, PWA metadata, brand wiring, and mobile navigation guardrails.
 
 ## Supabase
 
 1. Copy `.env.example` to `.env.local`.
 2. Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 3. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
-4. Apply `supabase/migrations/0001_kilnbook_phase1.sql`.
+4. Apply the migrations in order from `supabase/migrations/`.
 5. Run `supabase/seed.sql`.
 6. Configure Supabase Auth for email/password, magic link, Google, and password reset.
 7. Create a private `flux-and-fire-images` bucket and storage policies.
+
+## Vercel
+
+The project is linked to Vercel project `kilnbook` and connected to `graillabxyz/kilnbook`; pushes to the GitHub repository auto-deploy through Vercel's Next.js build path.
 
 ## Deliverables
 
@@ -54,6 +59,7 @@ The test command builds the app, runs Phase 1 business-rule tests, and verifies 
 - Usability review: `docs/usability-review.md`
 - Accessibility review: `docs/accessibility-review.md`
 - Brand system: `docs/brand.md`
+- PWA manifest and service worker: `public/manifest.webmanifest` and `public/sw.js`
 
 ## Canonical Relationship Summary
 

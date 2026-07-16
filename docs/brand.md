@@ -16,12 +16,14 @@ Primary assets:
 - Logo mark: `public/flux-and-fire-logo.svg`
 - Wordmark: `public/flux-and-fire-wordmark.svg`
 - Favicon: `public/favicon.svg`
+- PWA icons: `public/pwa-icon-192.png`, `public/pwa-icon-512.png`, and `public/apple-touch-icon.png`
 
 Logo mark rules:
 
 - Use the kiln arch and flame mark as the primary app icon, favicon, sidebar mark, and compact mobile brand cue.
 - The mark is terracotta on transparent background in `flux-and-fire-logo.svg`.
 - The favicon places the same terracotta mark on warm ivory.
+- Installable app icons should keep the terracotta mark on warm ivory and preserve enough safe area for maskable mobile launchers.
 - Minimum rendered size: 32 px square for UI, 48 px square for marketing and auth screens.
 - Keep clear space around the mark equal to at least 20 percent of the mark width.
 - Keep the mark upright. Do not rotate, crop, outline, recolor, add gradients, or add new shadows beyond the app's existing subtle container treatment.
@@ -197,8 +199,9 @@ Tags and badges:
 Mobile:
 
 - Mobile should feel like a social feed: home feed first, sticky top brand bar, bottom navigation.
-- Bottom navigation order is Home, Explore, Add, Profile.
-- The Add button opens the add chooser, not a hidden page jump.
+- Bottom navigation order is Home, Explore, Add, Search, Profile.
+- The Add button is centered, larger than the other nav icons, and opens the add chooser.
+- The mobile Add chooser uses four plain rows without descriptions; privacy is chosen in the post creation flow.
 - Mobile composer panels are hidden from the feed unless the user enters the Add flow.
 
 Charts:
@@ -237,6 +240,7 @@ Product language rules:
 - App logo and wordmark usage: `app/kilnbook-workspace.tsx`
 - Auth callback brand usage: `app/auth/callback/auth-callback-client.tsx`
 - Logo assets: `public/flux-and-fire-logo.svg`, `public/flux-and-fire-wordmark.svg`, `public/favicon.svg`
+- PWA assets: `public/manifest.webmanifest`, `public/sw.js`, `public/pwa-icon-192.png`, `public/pwa-icon-512.png`, `public/apple-touch-icon.png`
 
 Before merging brand-related changes:
 
