@@ -23,17 +23,17 @@ async function render() {
   );
 }
 
-test("server-renders Kilnbook without starter preview metadata", async () => {
+test("server-renders Flux and Fire without starter preview metadata", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Kilnbook<\/title>/i);
+  assert.match(html, /<title>Flux and Fire<\/title>/i);
   assert.match(html, /Firing journal/);
   assert.match(html, /Quiet Tenmoku/);
   assert.match(html, /Home feed/);
-  assert.match(html, /Studio process library/);
+  assert.match(html, /Ceramic process library/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);
 });
 

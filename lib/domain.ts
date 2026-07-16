@@ -4,6 +4,15 @@ export type Visibility = "private" | "followers" | "studio" | "public";
 
 export type UserPlan = "free" | "professional" | "studio";
 
+export type ProfileType =
+  | "artist"
+  | "studio"
+  | "educator"
+  | "researcher"
+  | "collective"
+  | "supplier"
+  | "custom";
+
 export type TemperatureUnit = "c" | "f";
 export type WeightUnit = "g" | "kg" | "oz" | "lb";
 export type WindSpeedUnit = "kph" | "mph" | "mps" | "knots";
@@ -105,6 +114,8 @@ export interface Profile {
   username: string;
   avatarColor: string;
   biography: string;
+  profileType: ProfileType;
+  identityLabel?: string;
   locationLabel?: string;
   website?: string;
   specialties: string[];
@@ -372,4 +383,3 @@ export interface ConversationPreview {
   updatedAt: string;
   linkedRecordLabel?: string;
 }
-

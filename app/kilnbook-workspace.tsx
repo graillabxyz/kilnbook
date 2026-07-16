@@ -9,6 +9,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronDown,
+  CircleX,
   ClipboardList,
   CloudSun,
   Flame,
@@ -54,6 +55,7 @@ import type {
   GlazeProfile,
   KilnProfile,
   Post,
+  Profile,
   Visibility,
 } from "@/lib/domain";
 import { getEntitlementDecision } from "@/lib/entitlements";
@@ -102,7 +104,7 @@ export function KilnbookWorkspace({
   const [view, setView] = useState<View>("Home");
   const [feedTab, setFeedTab] = useState<"Following" | "Popular">(() => {
     if (typeof window === "undefined") return "Following";
-    const saved = window.localStorage.getItem("kilnbook.feed-tab");
+    const saved = window.localStorage.getItem("flux-and-fire.feed-tab");
     return saved === "Following" || saved === "Popular" ? saved : "Following";
   });
   const [firings, setFirings] = useState<FiringRecord[]>(snapshot.firings);
@@ -112,7 +114,7 @@ export function KilnbookWorkspace({
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    window.localStorage.setItem("kilnbook.feed-tab", feedTab);
+    window.localStorage.setItem("flux-and-fire.feed-tab", feedTab);
   }, [feedTab]);
 
   const selectedFiring = useMemo(
@@ -227,7 +229,7 @@ export function KilnbookWorkspace({
     <main className="min-h-screen bg-[var(--kb-bg)] text-[var(--kb-ink)]">
       <div className="kb-shell">
         <Sidebar view={view} onViewChange={setView} />
-        <section className="kb-main">
+        <section className={view === "Home" ? "kb-main kb-main-home" : "kb-main"}>
           <Header
             viewerName={snapshot.viewer.displayName}
             view={view}
@@ -345,10 +347,10 @@ function Sidebar({
   return (
     <aside className="kb-sidebar" aria-label="Primary navigation">
       <div className="kb-brand">
-        <Image className="kb-brand-mark" src="/kilnbook-logo.svg" alt="" width={40} height={40} />
+        <Image className="kb-brand-mark" src="/flux-and-fire-logo.svg" alt="" width={40} height={40} />
         <div>
           <strong>{PRODUCT.name}</strong>
-          <span>Studio process library</span>
+          <span>Ceramic process library</span>
         </div>
       </div>
       <nav className="kb-nav">
@@ -389,17 +391,17 @@ function Header({
   onCreate: () => void;
 }) {
   return (
-    <header className="kb-header">
+    <header className={view === "Home" ? "kb-header kb-home-header" : "kb-header"}>
       <div className="kb-title-lockup">
-        <Image className="kb-header-logo" src="/kilnbook-logo.svg" alt="" width={40} height={40} />
+        <Image className="kb-header-logo" src="/flux-and-fire-logo.svg" alt="" width={40} height={40} />
         <div>
           <p className="kb-kicker">Workspace</p>
-          <h1>{view === "Library" ? "Library" : view}</h1>
+          <h1>{view === "Home" ? PRODUCT.name : view === "Library" ? "Library" : view}</h1>
         </div>
       </div>
       <label className="kb-search">
         <Search size={17} aria-hidden="true" />
-        <span className="sr-only">Search Kilnbook</span>
+        <span className="sr-only">Search Flux and Fire</span>
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
@@ -441,7 +443,7 @@ function HomeScreen({
   onOpenExplore: () => void;
 }) {
   return (
-    <div className="kb-grid-two">
+    <div className="kb-grid-two kb-home-grid">
       <section className="kb-panel kb-feed-panel">
         <div className="kb-section-title">
           <div>
@@ -469,8 +471,8 @@ function HomeScreen({
             <EmptyState
               icon={BookOpen}
               title="Your Following feed is quiet"
-              body="Follow ceramic artists or switch to Popular to see recent shared firing results."
-              actionLabel="Explore artists"
+              body="Follow profiles or switch to Popular to see recent shared firing results."
+              actionLabel="Explore profiles"
               onAction={onOpenExplore}
             />
           ) : (
@@ -486,12 +488,24 @@ function HomeScreen({
           )}
         </div>
       </section>
-      <aside className="kb-stack">
+      <aside className="kb-stack kb-home-rail">
         <MarketingLandingPreview />
         <AuthOnboardingPreview />
       </aside>
     </div>
   );
+}
+
+type ComposerImageDraft = {
+  id: string;
+  label: string;
+  tone: "dark" | "pale";
+  glazeIds: string[];
+  clayBodyIds: string[];
+};
+
+function compactIds(ids: Array<string | undefined>) {
+  return ids.filter((id): id is string => Boolean(id));
 }
 
 function PostComposer({
@@ -503,41 +517,322 @@ function PostComposer({
   clayBodies: ClayBodyProfile[];
   firings: FiringRecord[];
 }) {
+  const [selectedFiringId, setSelectedFiringId] = useState("");
+  const [selectedGlazeIds, setSelectedGlazeIds] = useState<string[]>([]);
+  const [selectedClayBodyIds, setSelectedClayBodyIds] = useState<string[]>([]);
+  const [composerImages, setComposerImages] = useState<ComposerImageDraft[]>([
+    {
+      id: "composer-image-1",
+      label: "Image 1",
+      tone: "dark",
+      glazeIds: compactIds([glazes[0]?.id]),
+      clayBodyIds: compactIds([clayBodies[0]?.id]),
+    },
+    {
+      id: "composer-image-2",
+      label: "Image 2",
+      tone: "pale",
+      glazeIds: compactIds([glazes[1]?.id ?? glazes[0]?.id]),
+      clayBodyIds: [],
+    },
+  ]);
+
+  const selectedFiring = firings.find((firing) => firing.id === selectedFiringId);
+
+  const addUnique = (values: string[], value: string) =>
+    value && !values.includes(value) ? [...values, value] : values;
+
+  const addImageGlaze = (imageId: string, glazeId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? { ...image, glazeIds: addUnique(image.glazeIds, glazeId) }
+          : image,
+      ),
+    );
+  };
+
+  const addImageClayBody = (imageId: string, clayBodyId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? { ...image, clayBodyIds: addUnique(image.clayBodyIds, clayBodyId) }
+          : image,
+      ),
+    );
+  };
+
+  const removeImageGlaze = (imageId: string, glazeId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? { ...image, glazeIds: image.glazeIds.filter((id) => id !== glazeId) }
+          : image,
+      ),
+    );
+  };
+
+  const removeImageClayBody = (imageId: string, clayBodyId: string) => {
+    setComposerImages((images) =>
+      images.map((image) =>
+        image.id === imageId
+          ? { ...image, clayBodyIds: image.clayBodyIds.filter((id) => id !== clayBodyId) }
+          : image,
+      ),
+    );
+  };
+
+  const addImageDraft = () => {
+    setComposerImages((images) => [
+      ...images,
+      {
+        id: `composer-image-${Date.now()}`,
+        label: `Image ${images.length + 1}`,
+        tone: images.length % 2 === 0 ? "dark" : "pale",
+        glazeIds: [],
+        clayBodyIds: [],
+      },
+    ]);
+  };
+
   return (
     <form className="kb-composer">
       <label>
         <span className="sr-only">Post text</span>
         <textarea
-          placeholder="Share a firing note, kiln-opening result, or glaze observation"
+          placeholder="Post an old firing, a glaze result you liked, or a kiln-opening note. Link only the process data you want to share."
           rows={3}
         />
       </label>
-      <div className="kb-composer-row">
-        <button type="button" className="kb-quiet-button">
-          <ImageIcon size={17} />
-          <span>Images</span>
-        </button>
-        <select aria-label="Link firing" defaultValue={firings[0]?.id}>
-          {firings.map((firing) => (
-            <option key={firing.id} value={firing.id}>
-              {firing.readableNumber}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Link glaze" defaultValue={glazes[0]?.id}>
-          {glazes.map((glaze) => (
-            <option key={glaze.id} value={glaze.id}>
-              {glaze.name}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Link clay body" defaultValue={clayBodies[0]?.id}>
-          {clayBodies.map((clay) => (
-            <option key={clay.id} value={clay.id}>
-              {clay.name}
-            </option>
-          ))}
-        </select>
+      <div className="kb-composer-grid">
+        <section className="kb-compose-module" aria-labelledby="post-record-links">
+          <div className="kb-module-head">
+            <div>
+              <p className="kb-kicker" id="post-record-links">Optional record links</p>
+              <strong>Choose what the post should connect to</strong>
+            </div>
+            <VisibilityPill visibility="followers" />
+          </div>
+          <div className="kb-compose-controls">
+            <label className="kb-select-field">
+              <span>Firing</span>
+              <span className="kb-select-wrap">
+                <select
+                  aria-label="Link firing"
+                  value={selectedFiringId}
+                  onChange={(event) => setSelectedFiringId(event.target.value)}
+                >
+                  <option value="">No firing linked</option>
+                  {firings.map((firing) => (
+                    <option key={firing.id} value={firing.id}>
+                      {firing.readableNumber} · {firing.title}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <label className="kb-select-field">
+              <span>Add glaze</span>
+              <span className="kb-select-wrap">
+                <select
+                  aria-label="Add linked glaze"
+                  defaultValue=""
+                  onChange={(event) => {
+                    setSelectedGlazeIds((ids) => addUnique(ids, event.target.value));
+                    event.currentTarget.value = "";
+                  }}
+                >
+                  <option value="">Choose a glaze</option>
+                  {glazes.map((glaze) => (
+                    <option key={glaze.id} value={glaze.id}>
+                      {glaze.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <label className="kb-select-field">
+              <span>Add clay body</span>
+              <span className="kb-select-wrap">
+                <select
+                  aria-label="Add linked clay body"
+                  defaultValue=""
+                  onChange={(event) => {
+                    setSelectedClayBodyIds((ids) => addUnique(ids, event.target.value));
+                    event.currentTarget.value = "";
+                  }}
+                >
+                  <option value="">Choose a clay body</option>
+                  {clayBodies.map((clay) => (
+                    <option key={clay.id} value={clay.id}>
+                      {clay.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          </div>
+          <div className="kb-selected-summary">
+            {selectedFiring && (
+              <span className="kb-chip record">
+                <Flame size={14} aria-hidden="true" />
+                {selectedFiring.readableNumber}
+              </span>
+            )}
+            {selectedGlazeIds.map((glazeId) => {
+              const glaze = glazes.find((item) => item.id === glazeId);
+              return (
+                <button
+                  type="button"
+                  className="kb-chip removable"
+                  key={glazeId}
+                  onClick={() =>
+                    setSelectedGlazeIds((ids) => ids.filter((id) => id !== glazeId))
+                  }
+                >
+                  <Layers3 size={14} aria-hidden="true" />
+                  {glaze?.name ?? glazeId}
+                  <CircleX size={14} aria-hidden="true" />
+                </button>
+              );
+            })}
+            {selectedClayBodyIds.map((clayBodyId) => {
+              const clay = clayBodies.find((item) => item.id === clayBodyId);
+              return (
+                <button
+                  type="button"
+                  className="kb-chip removable clay"
+                  key={clayBodyId}
+                  onClick={() =>
+                    setSelectedClayBodyIds((ids) => ids.filter((id) => id !== clayBodyId))
+                  }
+                >
+                  <Microscope size={14} aria-hidden="true" />
+                  {clay?.name ?? clayBodyId}
+                  <CircleX size={14} aria-hidden="true" />
+                </button>
+              );
+            })}
+            {!selectedFiring && selectedGlazeIds.length === 0 && selectedClayBodyIds.length === 0 && (
+              <span className="kb-muted-note">No record links selected</span>
+            )}
+          </div>
+        </section>
+        <section className="kb-compose-module" aria-labelledby="post-image-tags">
+          <div className="kb-module-head">
+            <div>
+              <p className="kb-kicker" id="post-image-tags">Images</p>
+              <strong>Each image can show different glazes</strong>
+            </div>
+            <button type="button" className="kb-quiet-button" onClick={addImageDraft}>
+              <ImageIcon size={17} />
+              <span>Add image</span>
+            </button>
+          </div>
+          <div className="kb-image-tag-list">
+            {composerImages.map((image) => (
+              <div className="kb-image-tag-card" key={image.id}>
+                <div className={`kb-ceramic-thumb ${image.tone}`} />
+                <div>
+                  <div className="kb-image-card-head">
+                    <strong>{image.label}</strong>
+                    {composerImages.length > 1 && (
+                      <button
+                        type="button"
+                        className="kb-icon-button mini"
+                        aria-label={`Remove ${image.label}`}
+                        onClick={() =>
+                          setComposerImages((images) =>
+                            images.filter((item) => item.id !== image.id),
+                          )
+                        }
+                      >
+                        <CircleX size={15} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="kb-selected-summary compact">
+                    {image.glazeIds.map((glazeId) => {
+                      const glaze = glazes.find((item) => item.id === glazeId);
+                      return (
+                        <button
+                          type="button"
+                          className="kb-chip removable image"
+                          key={glazeId}
+                          onClick={() => removeImageGlaze(image.id, glazeId)}
+                        >
+                          {glaze?.name ?? glazeId}
+                          <CircleX size={13} aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                    {image.clayBodyIds.map((clayBodyId) => {
+                      const clay = clayBodies.find((item) => item.id === clayBodyId);
+                      return (
+                        <button
+                          type="button"
+                          className="kb-chip removable image clay"
+                          key={clayBodyId}
+                          onClick={() => removeImageClayBody(image.id, clayBodyId)}
+                        >
+                          {clay?.name ?? clayBodyId}
+                          <CircleX size={13} aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                    {image.glazeIds.length === 0 && image.clayBodyIds.length === 0 && (
+                      <span className="kb-muted-note">No image tags yet</span>
+                    )}
+                  </div>
+                  <div className="kb-inline-controls">
+                    <label className="kb-select-wrap compact">
+                      <span className="sr-only">Add image glaze tag</span>
+                      <select
+                        defaultValue=""
+                        onChange={(event) => {
+                          addImageGlaze(image.id, event.target.value);
+                          event.currentTarget.value = "";
+                        }}
+                      >
+                        <option value="">Tag glaze</option>
+                        {glazes.map((glaze) => (
+                          <option key={glaze.id} value={glaze.id}>
+                            {glaze.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </label>
+                    <label className="kb-select-wrap compact">
+                      <span className="sr-only">Add image clay body tag</span>
+                      <select
+                        defaultValue=""
+                        onChange={(event) => {
+                          addImageClayBody(image.id, event.target.value);
+                          event.currentTarget.value = "";
+                        }}
+                      >
+                        <option value="">Tag clay</option>
+                        {clayBodies.map((clay) => (
+                          <option key={clay.id} value={clay.id}>
+                            {clay.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      <div className="kb-composer-footer">
+        <p>Public previews read from canonical records and only include fields the viewer is authorized to see.</p>
         <button type="button" className="kb-primary-button">
           <Send size={17} />
           <span>Publish</span>
@@ -586,10 +881,10 @@ function FeedCard({
       )}
       <div className="kb-chip-row">
         {post.structuredTagLabels.map((tag) => (
-          <span className="kb-chip" key={tag}>{tag}</span>
+          <span className="kb-chip record" key={tag}>{tag}</span>
         ))}
-        {glaze && <span className="kb-chip">{glaze.surface}</span>}
-        {clayBody && <span className="kb-chip">{clayBody.bodyType}</span>}
+        {glaze && <span className="kb-chip image">{glaze.surface}</span>}
+        {clayBody && <span className="kb-chip image clay">{clayBody.bodyType}</span>}
       </div>
       <div className="kb-feed-actions">
         <button type="button" aria-pressed={post.viewerLiked}>
@@ -639,13 +934,16 @@ function DashboardScreen({
             <p className="kb-kicker">Last 90 days</p>
             <h2>Firing and process dashboard</h2>
           </div>
-          <select aria-label="Dashboard timeframe" defaultValue="90">
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="year">This year</option>
-            <option value="all">All time</option>
-          </select>
+          <span className="kb-select-wrap kb-timeframe-select">
+            <select aria-label="Dashboard timeframe" defaultValue="90">
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="year">This year</option>
+              <option value="all">All time</option>
+            </select>
+            <ChevronDown size={16} aria-hidden="true" />
+          </span>
         </div>
         <div className="kb-metrics">
           <MetricCard label="Total firings" value={String(firings.length)} detail="3 completed, 1 planned" icon={Flame} />
@@ -831,7 +1129,7 @@ function LiveFiringPanel({
         </button>
       </div>
       <p className="kb-safety-note">
-        Advisory range {estimate.totalHoursRange[0]}-{estimate.totalHoursRange[1]} hours. Manual readings are not kiln-control data; follow kiln manufacturer and studio safety procedures.
+        Advisory range {estimate.totalHoursRange[0]}-{estimate.totalHoursRange[1]} hours. Manual readings are not kiln-control data; follow kiln manufacturer and local safety procedures.
       </p>
     </section>
   );
@@ -1010,28 +1308,37 @@ function CreateFiringForm({
         </label>
         <label>
           <span>Kiln</span>
-          <select {...register("kilnId")}>
-            {kilns.map((kiln) => (
-              <option key={kiln.id} value={kiln.id}>{kiln.name}</option>
-            ))}
-          </select>
+          <span className="kb-select-wrap">
+            <select {...register("kilnId")}>
+              {kilns.map((kiln) => (
+                <option key={kiln.id} value={kiln.id}>{kiln.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={16} aria-hidden="true" />
+          </span>
         </label>
         <div className="kb-form-grid">
           <label>
             <span>Glaze</span>
-            <select {...register("glazeId")}>
-              {glazes.map((glaze) => (
-                <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
-              ))}
-            </select>
+            <span className="kb-select-wrap">
+              <select {...register("glazeId")}>
+                {glazes.map((glaze) => (
+                  <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
           </label>
           <label>
             <span>Clay body</span>
-            <select {...register("clayBodyId")}>
-              {clayBodies.map((clay) => (
-                <option key={clay.id} value={clay.id}>{clay.name}</option>
-              ))}
-            </select>
+            <span className="kb-select-wrap">
+              <select {...register("clayBodyId")}>
+                {clayBodies.map((clay) => (
+                  <option key={clay.id} value={clay.id}>{clay.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
           </label>
         </div>
         <div className="kb-form-grid">
@@ -1047,11 +1354,14 @@ function CreateFiringForm({
         <div className="kb-form-grid">
           <label>
             <span>Location</span>
-            <select {...register("location")}>
-              <option value="indoors">Indoors</option>
-              <option value="semi_enclosed">Semi-enclosed</option>
-              <option value="outdoors_partially_covered">Outdoors covered</option>
-            </select>
+            <span className="kb-select-wrap">
+              <select {...register("location")}>
+                <option value="indoors">Indoors</option>
+                <option value="semi_enclosed">Semi-enclosed</option>
+                <option value="outdoors_partially_covered">Outdoors covered</option>
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
           </label>
           <label>
             <span>Humidity</span>
@@ -1402,7 +1712,7 @@ function MessagesScreen({
         <div className="kb-section-title">
           <div>
             <p className="kb-kicker">Messages</p>
-            <h2>Studio conversations with ceramic record links</h2>
+            <h2>Conversations with ceramic record links</h2>
           </div>
         </div>
         <div className="kb-message-list">
@@ -1508,10 +1818,11 @@ function ProfileScreen({
   posts,
   onOpenSettings,
 }: {
-  viewer: { displayName: string; username: string; biography: string; specialties: string[]; profileVisibility: Visibility; subscriptionTier: string; locationLabel?: string };
+  viewer: Profile;
   posts: Post[];
   onOpenSettings: () => void;
 }) {
+  const profileIdentity = viewer.identityLabel ?? formatProfileType(viewer.profileType);
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -1525,7 +1836,22 @@ function ProfileScreen({
           <VisibilityPill visibility={viewer.profileVisibility} />
         </div>
         <p>{viewer.biography}</p>
+        <div className="kb-profile-hierarchy" aria-label="Profile hierarchy">
+          <span>
+            <strong>Profile</strong>
+            <small>{profileIdentity}</small>
+          </span>
+          <span>
+            <strong>Records</strong>
+            <small>Firings, glazes, clay bodies</small>
+          </span>
+          <span>
+            <strong>Posts</strong>
+            <small>Optional links and image tags</small>
+          </span>
+        </div>
         <div className="kb-chip-row">
+          <span className="kb-chip record">{profileIdentity}</span>
           {viewer.specialties.map((specialty) => (
             <span className="kb-chip" key={specialty}>{specialty}</span>
           ))}
@@ -1567,6 +1893,7 @@ function SettingsScreen({ plan }: { plan: "free" | "professional" | "studio" }) 
         <div className="kb-settings-list">
           <SettingRow title="Email and password" body="Enabled through Supabase Auth with password reset." />
           <SettingRow title="Magic link and Google" body="Configured in Supabase providers, with secure session handling." />
+          <SettingRow title="Profile identity" body="Choose artist, studio, educator, researcher, collective, supplier, or a custom label." />
           <SettingRow title="Preferred units" body="Celsius, grams, liters, and kph stored as normalized presentation preferences." />
           <SettingRow title="Profile visibility" body="Public profile, private email, configurable notification preferences." />
         </div>
@@ -1624,7 +1951,7 @@ function MarketingLandingPreview() {
   return (
     <section className="kb-panel kb-landing-preview">
       <div className="kb-logo-heading">
-        <Image src="/kilnbook-logo.svg" alt="" width={58} height={58} />
+        <Image src="/flux-and-fire-logo.svg" alt="" width={58} height={58} />
         <div>
           <p className="kb-kicker">Public landing page</p>
           <h2>{PRODUCT.name}</h2>
@@ -1652,12 +1979,19 @@ function AuthOnboardingPreview() {
   return (
     <section className="kb-panel">
       <p className="kb-kicker">Onboarding</p>
-      <h3>Studio setup checklist</h3>
+      <h3>Profile setup checklist</h3>
+      <div className="kb-profile-type-grid" aria-label="Profile identity options">
+        {["Artist", "Studio", "Researcher", "Educator", "Collective", "Custom"].map((label, index) => (
+          <button type="button" className={index === 0 ? "active" : ""} key={label}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="kb-checklist">
-        <span><CheckCircle2 size={17} /> Profile and username</span>
+        <span><CheckCircle2 size={17} /> Name and username</span>
+        <span><CheckCircle2 size={17} /> Identity label</span>
         <span><CheckCircle2 size={17} /> Preferred units</span>
-        <span><CheckCircle2 size={17} /> First kiln</span>
-        <span><CheckCircle2 size={17} /> First glaze and clay body</span>
+        <span><CheckCircle2 size={17} /> First firing, glaze, or clay body</span>
       </div>
       <div className="kb-auth-tabs">
         <button type="button" className="active">Sign in</button>
@@ -1770,11 +2104,10 @@ function MobileNav({
   view: View;
   onViewChange: (view: View) => void;
 }) {
-  const items: Array<{ label: string; view: View; icon: LucideIcon }> = [
+  const items: Array<{ label: string; view: View; icon: LucideIcon; compose?: boolean }> = [
     { label: "Home", view: "Home", icon: BookOpen },
-    { label: "Firings", view: "Firings", icon: Flame },
-    { label: "Add", view: "Firings", icon: Plus },
-    { label: "Library", view: "Library", icon: Layers3 },
+    { label: "Explore", view: "Explore", icon: Search },
+    { label: "Add", view: "Firings", icon: Plus, compose: true },
     { label: "Profile", view: "Profile", icon: UserRound },
   ];
   return (
@@ -1785,7 +2118,10 @@ function MobileNav({
           <button
             type="button"
             key={item.label}
-            className={view === item.view ? "active" : ""}
+            className={[
+              view === item.view && !item.compose ? "active" : "",
+              item.compose ? "compose" : "",
+            ].filter(Boolean).join(" ")}
             onClick={() => onViewChange(item.view)}
           >
             <Icon size={20} />
@@ -1810,4 +2146,11 @@ function relativeDate(value: string): string {
   const diffHours = Math.max((Date.now() - new Date(value).getTime()) / 3_600_000, 0);
   if (diffHours < 24) return `${Math.max(Math.round(diffHours), 1)}h`;
   return `${Math.round(diffHours / 24)}d`;
+}
+
+function formatProfileType(profileType: Profile["profileType"]) {
+  return profileType
+    .split("_")
+    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+    .join(" ");
 }

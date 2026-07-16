@@ -1,6 +1,6 @@
-# Kilnbook
+# Flux and Fire
 
-Kilnbook is a production-oriented web application scaffold for ceramic artists, studios, glaze researchers, and kiln operators. It combines a firing journal, glaze and clay-body libraries, firing analytics, shared result discovery, social posts, and messaging architecture.
+Flux and Fire is a production-oriented web application scaffold for ceramic artists, studios, educators, glaze researchers, collectives, and kiln operators. Every account starts with a profile identity, then adds the firings, glazes, clay bodies, kilns, posts, and images that fit that profile.
 
 ## Stack
 
@@ -39,7 +39,7 @@ The test command builds the app, runs Phase 1 business-rule tests, and verifies 
 4. Apply `supabase/migrations/0001_kilnbook_phase1.sql`.
 5. Run `supabase/seed.sql`.
 6. Configure Supabase Auth for email/password, magic link, Google, and password reset.
-7. Create a private `kilnbook-images` bucket and storage policies.
+7. Create a private `flux-and-fire-images` bucket and storage policies.
 
 ## Deliverables
 
@@ -63,4 +63,3 @@ The test command builds the app, runs Phase 1 business-rule tests, and verifies 
 - Images are canonical storage metadata and are related to firings, glazes, clay bodies, pieces, and applications through join tables.
 - Posts link to canonical records and may store only lightweight historical preview snapshots.
 - Private recipes and private firing data are protected by RLS and service-layer authorization.
-

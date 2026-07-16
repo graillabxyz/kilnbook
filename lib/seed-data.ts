@@ -23,6 +23,8 @@ export const profiles: Profile[] = [
     username: "marachen",
     avatarColor: "#8f4f3a",
     biography: "Cone 10 reduction, porcelain test tiles, and quiet bowls.",
+    profileType: "artist",
+    identityLabel: "Ceramic artist",
     locationLabel: "Pacific Northwest",
     website: "https://example.com/mara",
     specialties: ["reduction glazes", "porcelain", "kiln logs"],
@@ -38,9 +40,11 @@ export const profiles: Profile[] = [
     displayName: "Jules Navarro",
     username: "julespots",
     avatarColor: "#315d67",
-    biography: "Soda firing and clay-body tests for teaching studios.",
+    biography: "Soda firing and clay-body tests for community classes.",
+    profileType: "educator",
+    identityLabel: "Teaching artist",
     locationLabel: "Northern California",
-    specialties: ["soda", "stoneware", "studio teaching"],
+    specialties: ["soda", "stoneware", "teaching"],
     preferredTemperatureUnit: "f",
     preferredWeightUnit: "lb",
     preferredWindSpeedUnit: "mph",
@@ -565,4 +569,3 @@ export const kilnbookSeed = {
   posts,
   conversations,
 } as const;
-

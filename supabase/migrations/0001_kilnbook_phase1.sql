@@ -1,4 +1,4 @@
--- Kilnbook Phase 1 schema for Supabase PostgreSQL.
+-- Flux and Fire Phase 1 schema for Supabase PostgreSQL.
 -- The UI never depends on duplicated display records; canonical objects are
 -- joined through explicit relationship tables and versioned where history matters.
 
@@ -10,6 +10,8 @@ create table public.profiles (
   username text not null unique,
   avatar_url text,
   biography text not null default '',
+  profile_type text not null default 'artist' check (profile_type in ('artist', 'studio', 'educator', 'researcher', 'collective', 'supplier', 'custom')),
+  identity_label text,
   approximate_location text,
   website text,
   ceramic_specialties text[] not null default '{}',
@@ -388,7 +390,7 @@ create table public.result_defects (
 create table public.images (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
-  storage_bucket text not null default 'kilnbook-images',
+  storage_bucket text not null default 'flux-and-fire-images',
   storage_path text not null,
   original_filename text,
   content_type text not null,
@@ -843,4 +845,3 @@ create policy "mutes self" on public.mutes
   for all using (muter_id = auth.uid()) with check (muter_id = auth.uid());
 create policy "feed preferences self" on public.feed_preferences
   for all using (profile_id = auth.uid()) with check (profile_id = auth.uid());
-

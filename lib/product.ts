@@ -1,9 +1,9 @@
 export const PRODUCT = {
-  name: "Kilnbook",
+  name: "Flux and Fire",
   tagline: "A calm record of every firing, glaze, clay body, and result.",
   description:
-    "Kilnbook helps ceramic artists preserve firing history, connect glaze results to real conditions, and share selected knowledge without exposing private recipes.",
-  supportEmail: "support@kilnbook.example",
+    "Flux and Fire helps ceramic artists, studios, educators, researchers, and collectives preserve firing history, connect glaze results to real conditions, and share selected knowledge without exposing private recipes.",
+  supportEmail: "support@fluxandfire.example",
 } as const;
 
 export const PRIMARY_NAVIGATION = [
@@ -22,11 +22,10 @@ export const PRIMARY_NAVIGATION = [
 
 export const MOBILE_NAVIGATION = [
   "Home",
-  "Firings",
+  "Explore",
   "Add",
   "Library",
   "Profile",
 ] as const;
 
 export type PrimaryNavigationItem = (typeof PRIMARY_NAVIGATION)[number];
-
