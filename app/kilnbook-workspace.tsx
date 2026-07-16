@@ -175,20 +175,11 @@ export function KilnbookWorkspace({
   snapshot: KilnbookWorkspaceSnapshot;
 }) {
   const [view, setView] = useState<View>("Home");
-  const [supabaseConfigured] = useState(isSupabaseBrowserConfigured);
   const [viewer, setViewer] = useState<Profile>(snapshot.viewer);
-  const [authStatus, setAuthStatus] = useState<AuthStatus>(() =>
-    supabaseConfigured
-      ? {
-          state: "loading",
-          message: "Checking Supabase session.",
-        }
-      : {
-          state: "unconfigured",
-          message:
-            "Supabase browser client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
-        },
-  );
+  const [authStatus, setAuthStatus] = useState<AuthStatus>({
+    state: "loading",
+    message: "Checking Supabase session.",
+  });
   const [feedTab, setFeedTab] = useState<"Following" | "Popular">("Following");
   const [firings, setFirings] = useState<FiringRecord[]>(snapshot.firings);
   const [liveReadings, setLiveReadings] = useState(snapshot.firingLogPoints);
@@ -202,7 +193,16 @@ export function KilnbookWorkspace({
   useEffect(() => {
     let active = true;
 
-    if (!supabaseConfigured) return undefined;
+    if (!isSupabaseBrowserConfigured()) {
+      setAuthStatus({
+        state: "unconfigured",
+        message:
+          "Supabase browser client is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      });
+      return () => {
+        active = false;
+      };
+    }
 
     const supabase = createSupabaseBrowserClient();
 
@@ -256,7 +256,7 @@ export function KilnbookWorkspace({
       active = false;
       unsubscribe?.();
     };
-  }, [snapshot.viewer, supabaseConfigured]);
+  }, [snapshot.viewer]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("flux-and-fire.feed-tab");
