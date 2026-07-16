@@ -199,6 +199,12 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(uxDoc, /Mobile-First Casual Poster/);
   assert.match(usabilityDoc, /docs\/ux-psychographics\.md/);
 
+  const composerStart = workspace.indexOf("function PostComposer");
+  const composerEnd = workspace.indexOf("function InlinePicker");
+  assert.notEqual(composerStart, -1);
+  assert.notEqual(composerEnd, -1);
+  const composer = workspace.slice(composerStart, composerEnd);
+
   assert.match(workspace, /type ComposerImageAnnotation/);
   assert.match(workspace, /annotations: ComposerImageAnnotation\[\]/);
   assert.match(workspace, /Result group 1/);
@@ -209,6 +215,18 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(workspace, /Broad records for the whole post/);
   assert.doesNotMatch(workspace, /Each image can show different glazes/);
   assert.doesNotMatch(workspace, /Add profile/);
+  assert.match(composer, /firings\.filter\(\(firing\) => firing\.ownerId === viewer\.id\)/);
+  assert.match(composer, /glazes\.filter\(\(glaze\) => glaze\.ownerId === viewer\.id\)/);
+  assert.match(composer, /clayBodies\.filter\(\(clay\) => clay\.ownerId === viewer\.id\)/);
+  assert.match(composer, /kilns\.filter\(\(kiln\) => kiln\.ownerId === viewer\.id\)/);
+  assert.match(composer, /myFirings\.map/);
+  assert.match(composer, /myGlazes\.map/);
+  assert.match(composer, /myClayBodies\.map/);
+  assert.match(composer, /myKilns\.map/);
+  assert.doesNotMatch(composer, /firings\.map\(/);
+  assert.doesNotMatch(composer, /glazes\.map\(/);
+  assert.doesNotMatch(composer, /clayBodies\.map\(/);
+  assert.doesNotMatch(composer, /kilns\.map\(/);
 
   assert.match(globals, /\.kb-image-annotation-list/);
   assert.match(globals, /\.kb-image-annotation/);

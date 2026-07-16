@@ -1520,6 +1520,7 @@ export function KilnbookWorkspace({
             />
           ) : view === "Home" ? (
             <HomeScreen
+              viewer={viewer}
               feedTab={feedTab}
               onFeedTabChange={setFeedTab}
               posts={feedTab === "Following" ? snapshot.posts : popularPosts}
@@ -2994,6 +2995,7 @@ function GlazeResultAddFlow({
 }
 
 function HomeScreen({
+  viewer,
   feedTab,
   onFeedTabChange,
   posts,
@@ -3007,6 +3009,7 @@ function HomeScreen({
   onCreateClayBodyProfile,
   onCreateKilnProfile,
 }: {
+  viewer: Profile;
   feedTab: "Following" | "Popular";
   onFeedTabChange: (tab: "Following" | "Popular") => void;
   posts: Post[];
@@ -3048,6 +3051,8 @@ function HomeScreen({
           </div>
         </div>
         <PostComposer
+          key={viewer.id}
+          viewer={viewer}
           glazes={glazes}
           clayBodies={clayBodies}
           kilns={kilns}
@@ -3111,6 +3116,7 @@ type PickerGroup = {
 };
 
 function PostComposer({
+  viewer,
   glazes,
   clayBodies,
   kilns,
@@ -3120,6 +3126,7 @@ function PostComposer({
   onCreateClayBodyProfile,
   onCreateKilnProfile,
 }: {
+  viewer: Profile;
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
   kilns: KilnProfile[];
@@ -3137,7 +3144,23 @@ function PostComposer({
   const [selectedKilnIds, setSelectedKilnIds] = useState<string[]>([]);
   const [composerImages, setComposerImages] = useState<ComposerImageDraft[]>([]);
 
-  const selectedFiring = firings.find((firing) => firing.id === selectedFiringId);
+  const myFirings = useMemo(
+    () => firings.filter((firing) => firing.ownerId === viewer.id),
+    [firings, viewer.id],
+  );
+  const myGlazes = useMemo(
+    () => glazes.filter((glaze) => glaze.ownerId === viewer.id),
+    [glazes, viewer.id],
+  );
+  const myClayBodies = useMemo(
+    () => clayBodies.filter((clay) => clay.ownerId === viewer.id),
+    [clayBodies, viewer.id],
+  );
+  const myKilns = useMemo(
+    () => kilns.filter((kiln) => kiln.ownerId === viewer.id),
+    [kilns, viewer.id],
+  );
+  const selectedFiring = myFirings.find((firing) => firing.id === selectedFiringId);
   const imageAnnotationCount = composerImages.reduce(
     (total, image) => total + image.annotations.length,
     0,
@@ -3385,7 +3408,7 @@ function PostComposer({
                   onChange={(event) => setSelectedFiringId(event.target.value)}
                 >
                   <option value="">No overall firing</option>
-                  {firings.map((firing) => (
+                  {myFirings.map((firing) => (
                     <option key={firing.id} value={firing.id}>
                       {firing.readableNumber} · {firing.title}
                     </option>
@@ -3431,7 +3454,7 @@ function PostComposer({
                   },
                   {
                     label: "Glazes",
-                    options: glazes.map((glaze) => ({
+                    options: myGlazes.map((glaze) => ({
                       label: glaze.name,
                       detail: glaze.coneRange,
                       icon: Layers3,
@@ -3441,7 +3464,7 @@ function PostComposer({
                   },
                   {
                     label: "Clay bodies",
-                    options: clayBodies.map((clay) => ({
+                    options: myClayBodies.map((clay) => ({
                       label: clay.name,
                       detail: clay.coneRange,
                       icon: Microscope,
@@ -3451,7 +3474,7 @@ function PostComposer({
                   },
                   {
                     label: "Kilns",
-                    options: kilns.map((kiln) => ({
+                    options: myKilns.map((kiln) => ({
                       label: kiln.name,
                       detail: kiln.recommendedConeRange,
                       icon: Gauge,
@@ -3471,7 +3494,7 @@ function PostComposer({
               </span>
             )}
             {selectedGlazeIds.map((glazeId) => {
-              const glaze = glazes.find((item) => item.id === glazeId);
+              const glaze = myGlazes.find((item) => item.id === glazeId);
               return (
                 <button
                   type="button"
@@ -3488,7 +3511,7 @@ function PostComposer({
               );
             })}
             {selectedClayBodyIds.map((clayBodyId) => {
-              const clay = clayBodies.find((item) => item.id === clayBodyId);
+              const clay = myClayBodies.find((item) => item.id === clayBodyId);
               return (
                 <button
                   type="button"
@@ -3505,7 +3528,7 @@ function PostComposer({
               );
             })}
             {selectedKilnIds.map((kilnId) => {
-              const kiln = kilns.find((item) => item.id === kilnId);
+              const kiln = myKilns.find((item) => item.id === kilnId);
               return (
                 <button
                   type="button"
@@ -3572,7 +3595,7 @@ function PostComposer({
                   </div>
                   <div className="kb-image-annotation-list">
                     {image.annotations.map((annotation) => {
-                      const annotationFiring = firings.find((firing) => firing.id === annotation.firingId);
+                      const annotationFiring = myFirings.find((firing) => firing.id === annotation.firingId);
                       return (
                         <section className="kb-image-annotation" key={annotation.id}>
                           <div className="kb-image-annotation-head">
@@ -3599,7 +3622,7 @@ function PostComposer({
                                 }
                               >
                                 <option value="">Unknown or unrecorded firing</option>
-                                {firings.map((firing) => (
+                                {myFirings.map((firing) => (
                                   <option key={firing.id} value={firing.id}>
                                     {firing.readableNumber} · {firing.title}
                                   </option>
@@ -3616,7 +3639,7 @@ function PostComposer({
                               </span>
                             )}
                             {annotation.glazeIds.map((glazeId) => {
-                              const glaze = glazes.find((item) => item.id === glazeId);
+                              const glaze = myGlazes.find((item) => item.id === glazeId);
                               return (
                                 <button
                                   type="button"
@@ -3630,7 +3653,7 @@ function PostComposer({
                               );
                             })}
                             {annotation.clayBodyIds.map((clayBodyId) => {
-                              const clay = clayBodies.find((item) => item.id === clayBodyId);
+                              const clay = myClayBodies.find((item) => item.id === clayBodyId);
                               return (
                                 <button
                                   type="button"
@@ -3680,7 +3703,7 @@ function PostComposer({
                                 },
                                 {
                                   label: "Glazes",
-                                  options: glazes.map((glaze) => ({
+                                  options: myGlazes.map((glaze) => ({
                                     label: glaze.name,
                                     detail: glaze.coneRange,
                                     icon: Layers3,
@@ -3689,7 +3712,7 @@ function PostComposer({
                                 },
                                 {
                                   label: "Clay bodies",
-                                  options: clayBodies.map((clay) => ({
+                                  options: myClayBodies.map((clay) => ({
                                     label: clay.name,
                                     detail: clay.coneRange,
                                     icon: Microscope,
