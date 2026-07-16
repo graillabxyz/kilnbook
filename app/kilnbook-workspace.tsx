@@ -59,9 +59,13 @@ import {
 import { z } from "zod";
 import { BRAND_ASSETS, BRAND_CHART_COLORS, BRAND_COLORS } from "@/lib/brand";
 import type {
+  AtmosphereType,
   ClayBodyProfile,
+  FiringEnvironmentRecord,
   FiringRecord,
+  FiringType,
   GlazeProfile,
+  KilnLocation,
   KilnProfile,
   Post,
   Profile,
@@ -132,6 +136,16 @@ type GlazeResultPayload = {
   visibility: AddVisibility;
   imageName?: string;
 };
+type FiringEnvironmentPayload = Omit<FiringEnvironmentRecord, "id" | "firingId">;
+type LiveFiringSetupPayload = {
+  kilnId: string;
+  firingType: FiringType;
+  fuelType: string;
+  targetTemperatureC: number;
+  targetCone: string;
+  atmosphere: AtmosphereType;
+  environment: FiringEnvironmentPayload;
+};
 
 type MobileNavItem =
   | { label: "Home" | "Explore" | "Profile"; view: View; icon: LucideIcon }
@@ -139,6 +153,75 @@ type MobileNavItem =
   | { label: "Search"; icon: LucideIcon; action: "search" };
 
 const MOBILE_SCROLL_VIEWS = new Set<View>(["Home", "Explore", "Profile", "Settings", "Add"]);
+const FIRING_TYPE_OPTIONS: Array<{ value: FiringType; label: string }> = [
+  { value: "electric", label: "Electric" },
+  { value: "gas", label: "Gas" },
+  { value: "wood", label: "Wood" },
+  { value: "soda", label: "Soda" },
+  { value: "salt", label: "Salt" },
+  { value: "raku", label: "Raku" },
+  { value: "pit", label: "Pit" },
+  { value: "saggar", label: "Saggar" },
+  { value: "experimental", label: "Experimental" },
+  { value: "other", label: "Other" },
+];
+const ATMOSPHERE_OPTIONS: Array<{ value: AtmosphereType; label: string }> = [
+  { value: "oxidation", label: "Oxidation" },
+  { value: "neutral", label: "Neutral" },
+  { value: "light_reduction", label: "Light reduction" },
+  { value: "reduction", label: "Reduction" },
+  { value: "heavy_reduction", label: "Heavy reduction" },
+  { value: "localized_reduction", label: "Localized reduction" },
+  { value: "carbon_trapping", label: "Carbon trapping" },
+  { value: "flashing", label: "Flashing" },
+  { value: "soda", label: "Soda" },
+  { value: "salt", label: "Salt" },
+  { value: "unknown", label: "Unknown" },
+  { value: "other", label: "Other" },
+];
+const KILN_LOCATION_OPTIONS: Array<{ value: KilnLocation; label: string }> = [
+  { value: "indoors", label: "Indoors" },
+  { value: "semi_enclosed", label: "Semi-enclosed" },
+  { value: "outdoors_uncovered", label: "Outdoors" },
+  { value: "outdoors_partially_covered", label: "Outdoors covered" },
+  { value: "outdoors_fully_covered_open_sided", label: "Covered open-sided" },
+  { value: "other", label: "Other" },
+];
+
+function formatOptionLabel<T extends string>(options: Array<{ value: T; label: string }>, value: T) {
+  return options.find((option) => option.value === value)?.label ?? value.replaceAll("_", " ");
+}
+
+function isOutdoorKilnLocation(location: KilnLocation) {
+  return location !== "indoors";
+}
+
+function decimalInputValue(value: number | undefined) {
+  return value === undefined ? "" : String(Math.round(value * 10) / 10);
+}
+
+function parseOptionalNumber(value: string) {
+  const parsed = Number(value);
+  return value.trim() === "" || Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function windDirectionFromDegrees(value: number | undefined) {
+  if (value === undefined) return "";
+  const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return directions[Math.round(value / 45) % directions.length];
+}
+
+function weatherCodeLabel(code: number | undefined) {
+  if (code === undefined) return "Current conditions";
+  if (code === 0) return "Clear";
+  if ([1, 2, 3].includes(code)) return "Partly cloudy";
+  if ([45, 48].includes(code)) return "Fog";
+  if ([51, 53, 55, 56, 57].includes(code)) return "Drizzle";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "Rain";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "Snow";
+  if ([95, 96, 99].includes(code)) return "Storm";
+  return "Current conditions";
+}
 
 const firingFormSchema = z.object({
   title: z.string().min(3, "Give the firing a clear title."),
@@ -182,6 +265,9 @@ export function KilnbookWorkspace({
   });
   const [feedTab, setFeedTab] = useState<"Following" | "Popular">("Following");
   const [firings, setFirings] = useState<FiringRecord[]>(snapshot.firings);
+  const [environmentRecords, setEnvironmentRecords] = useState<FiringEnvironmentRecord[]>(
+    snapshot.firingEnvironmentRecords,
+  );
   const [liveReadings, setLiveReadings] = useState(snapshot.firingLogPoints);
   const [selectedFiringId, setSelectedFiringId] = useState(snapshot.firings[0]?.id ?? "");
   const [imageTags, setImageTags] = useState(snapshot.images[1]?.glazeIds ?? []);
@@ -281,6 +367,10 @@ export function KilnbookWorkspace({
       ),
     [liveReadings, selectedFiring?.id],
   );
+  const selectedEnvironment = useMemo(
+    () => environmentRecords.find((record) => record.firingId === selectedFiring?.id),
+    [environmentRecords, selectedFiring?.id],
+  );
 
   const estimate = useMemo(
     () =>
@@ -305,11 +395,11 @@ export function KilnbookWorkspace({
         controlledCooling: true,
         startingAmbientC: 22,
         kilnLocation:
-          snapshot.firingEnvironmentRecords.find(
-            (record) => record.firingId === selectedFiring?.id,
-          )?.kilnLocation ?? "indoors",
-        humidityPercentage: 64,
-        windSpeedKph: 14,
+          selectedEnvironment?.kilnLocation ??
+          snapshot.kilns.find((kiln) => kiln.id === selectedFiring?.kilnId)?.defaultLocation ??
+          "indoors",
+        humidityPercentage: selectedEnvironment?.humidityStartPercentage ?? 64,
+        windSpeedKph: selectedEnvironment?.windSpeedKph ?? 14,
         comparableFirings: firings
           .filter((firing) => firing.id !== selectedFiring?.id && firing.totalHeatingMinutes)
           .map((firing) => ({
@@ -322,7 +412,7 @@ export function KilnbookWorkspace({
             totalCoolingMinutes: firing.totalCoolingMinutes ?? 0,
           })),
       }),
-    [firings, selectedFiring, snapshot.firingEnvironmentRecords, snapshot.kilns],
+    [firings, selectedEnvironment, selectedFiring, snapshot.kilns],
   );
 
   const handleQuickReading = () => {
@@ -349,8 +439,73 @@ export function KilnbookWorkspace({
     ]);
   };
 
+  const createEnvironmentPayload = (
+    kiln: KilnProfile | undefined,
+    observedAt: string,
+    overrides: Partial<FiringEnvironmentPayload> = {},
+  ): FiringEnvironmentPayload => {
+    const kilnLocation = overrides.kilnLocation ?? kiln?.defaultLocation ?? "indoors";
+    const outdoor = isOutdoorKilnLocation(kilnLocation);
+    return {
+      kilnLocation,
+      locationLabel: overrides.locationLabel ?? viewer.locationLabel,
+      observedAt: overrides.observedAt ?? observedAt,
+      weatherSource: overrides.weatherSource ?? "manual",
+      outsideStartTemperatureC:
+        overrides.outsideStartTemperatureC ?? (outdoor ? 22 : undefined),
+      outsideLowC: overrides.outsideLowC ?? (outdoor ? 18 : undefined),
+      outsideHighC: overrides.outsideHighC ?? (outdoor ? 27 : undefined),
+      indoorAmbientTemperatureC:
+        overrides.indoorAmbientTemperatureC ?? (outdoor ? undefined : 22),
+      humidityStartPercentage: overrides.humidityStartPercentage ?? 58,
+      humidityLowPercentage: overrides.humidityLowPercentage,
+      humidityHighPercentage: overrides.humidityHighPercentage,
+      windSpeedKph: overrides.windSpeedKph ?? (outdoor ? 8 : 0),
+      windDirection: overrides.windDirection ?? (outdoor ? "W" : undefined),
+      windGustKph: overrides.windGustKph ?? (outdoor ? 14 : undefined),
+      dewPointC: overrides.dewPointC,
+      atmosphericPressureHpa: overrides.atmosphericPressureHpa,
+      surfacePressureHpa: overrides.surfacePressureHpa,
+      cloudCoverPercentage: overrides.cloudCoverPercentage,
+      precipitationMm: overrides.precipitationMm,
+      weatherCode: overrides.weatherCode,
+      rainConditions: overrides.rainConditions ?? (outdoor ? "dry" : undefined),
+      ventilationNotes:
+        overrides.ventilationNotes ??
+        (outdoor ? "Outdoor airflow reading pending." : "Ventilation notes pending."),
+      weatherNotes:
+        overrides.weatherNotes ??
+        (outdoor
+          ? "Use location data or manual observations to capture the outdoor firing atmosphere."
+          : "Indoor ambient reading captured manually."),
+      latitude: overrides.latitude,
+      longitude: overrides.longitude,
+      elevationMeters: overrides.elevationMeters,
+    };
+  };
+
+  const upsertEnvironmentRecord = (firingId: string, environment: FiringEnvironmentPayload) => {
+    setEnvironmentRecords((records) => {
+      const existing = records.find((record) => record.firingId === firingId);
+      if (existing) {
+        return records.map((record) =>
+          record.firingId === firingId ? { ...record, ...environment } : record,
+        );
+      }
+      return [
+        {
+          id: `environment-${firingId}`,
+          firingId,
+          ...environment,
+        },
+        ...records,
+      ];
+    });
+  };
+
   const handleCreateFiring = (values: FiringFormValues) => {
     const kiln = snapshot.kilns.find((item) => item.id === values.kilnId);
+    const createdAt = new Date().toISOString();
     const newFiring: FiringRecord = {
       id: `firing-${Date.now()}`,
       ownerId: viewer.id,
@@ -364,7 +519,7 @@ export function KilnbookWorkspace({
       firingType: kiln?.kilnType ?? "electric",
       status: "planned",
       visibility: "private",
-      plannedStartAt: new Date().toISOString(),
+      plannedStartAt: createdAt,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       leadFirer: viewer.displayName,
       targetTemperatureC: values.targetTemperatureC,
@@ -375,6 +530,15 @@ export function KilnbookWorkspace({
     };
     setFirings((items) => [newFiring, ...items]);
     setSelectedFiringId(newFiring.id);
+    upsertEnvironmentRecord(
+      newFiring.id,
+      createEnvironmentPayload(kiln, createdAt, {
+        kilnLocation: values.location,
+        humidityStartPercentage: values.humidity,
+        windSpeedKph: values.windSpeedKph,
+        locationLabel: viewer.locationLabel,
+      }),
+    );
   };
 
   const navigateToView = (nextView: View) => {
@@ -483,7 +647,14 @@ export function KilnbookWorkspace({
 
     if (kind === "live_firing") {
       const firing = createAddFiring("live_firing", visibility, createdAt);
+      const kiln = snapshot.kilns.find((item) => item.id === firing.kilnId);
       firingId = firing.id;
+      upsertEnvironmentRecord(
+        firing.id,
+        createEnvironmentPayload(kiln, createdAt, {
+          kilnLocation: kiln?.defaultLocation ?? "indoors",
+        }),
+      );
       setLiveReadings((points) => [
         ...points,
         {
@@ -546,6 +717,30 @@ export function KilnbookWorkspace({
     setView("Glazes");
   };
 
+  const handleUpdateLiveFiringSetup = (firingId: string, payload: LiveFiringSetupPayload) => {
+    const kiln = snapshot.kilns.find((item) => item.id === payload.kilnId);
+    setFirings((items) =>
+      items.map((firing) =>
+        firing.id === firingId
+          ? {
+              ...firing,
+              kilnId: payload.kilnId,
+              kilnNameSnapshot: kiln?.name ?? "Custom kiln",
+              kilnSpecSnapshot: kiln
+                ? `${kiln.manufacturer} ${kiln.model}, ${kiln.usableVolumeLiters} L`
+                : `${formatOptionLabel(FIRING_TYPE_OPTIONS, payload.firingType)} kiln`,
+              firingType: payload.firingType,
+              targetTemperatureC: payload.targetTemperatureC,
+              targetCone: payload.targetCone,
+              atmosphere: payload.atmosphere,
+              notes: `Live setup: ${payload.fuelType}, ${formatOptionLabel(KILN_LOCATION_OPTIONS, payload.environment.kilnLocation)}, humidity ${payload.environment.humidityStartPercentage ?? "n/a"}%, wind ${payload.environment.windSpeedKph ?? 0} kph.`,
+            }
+          : firing,
+      ),
+    );
+    upsertEnvironmentRecord(firingId, payload.environment);
+  };
+
   const handleFinishLiveFiring = (firingId: string) => {
     const finishedAt = new Date().toISOString();
     setFirings((items) =>
@@ -604,6 +799,9 @@ export function KilnbookWorkspace({
               viewer={viewer}
               firings={firings}
               activeFiring={firings.find((firing) => firing.id === activeAddFlow.firingId)}
+              activeEnvironment={environmentRecords.find(
+                (record) => record.firingId === activeAddFlow.firingId,
+              )}
               kilns={snapshot.kilns}
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
@@ -614,6 +812,7 @@ export function KilnbookWorkspace({
               onSaveGlazeRecipe={handleSaveGlazeRecipe}
               onSavePreviousFiring={handleSavePreviousFiring}
               onSaveGlazeResult={handleSaveGlazeResult}
+              onUpdateLiveFiringSetup={handleUpdateLiveFiringSetup}
               onFinishLiveFiring={handleFinishLiveFiring}
             />
           ) : view === "Home" ? (
@@ -1036,6 +1235,7 @@ function AddFlowScreen({
   viewer,
   firings,
   activeFiring,
+  activeEnvironment,
   kilns,
   glazes,
   clayBodies,
@@ -1046,12 +1246,14 @@ function AddFlowScreen({
   onSaveGlazeRecipe,
   onSavePreviousFiring,
   onSaveGlazeResult,
+  onUpdateLiveFiringSetup,
   onFinishLiveFiring,
 }: {
   flow: ActiveAddFlow;
   viewer: Profile;
   firings: FiringRecord[];
   activeFiring?: FiringRecord;
+  activeEnvironment?: FiringEnvironmentRecord;
   kilns: KilnProfile[];
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
@@ -1062,6 +1264,7 @@ function AddFlowScreen({
   onSaveGlazeRecipe: (payload: GlazeRecipePayload) => void;
   onSavePreviousFiring: (payload: PreviousFiringPayload) => void;
   onSaveGlazeResult: (payload: GlazeResultPayload) => void;
+  onUpdateLiveFiringSetup: (firingId: string, payload: LiveFiringSetupPayload) => void;
   onFinishLiveFiring: (firingId: string) => void;
 }) {
   const shared = {
@@ -1075,9 +1278,12 @@ function AddFlowScreen({
       <LiveFiringAddFlow
         {...shared}
         firing={activeFiring}
+        environment={activeEnvironment}
+        kilns={kilns}
         ratePoints={ratePoints}
         estimate={estimate}
         onQuickReading={onQuickReading}
+        onUpdateSetup={onUpdateLiveFiringSetup}
         onFinishLiveFiring={onFinishLiveFiring}
       />
     );
@@ -1277,19 +1483,25 @@ function LiveFiringAddFlow({
   flow,
   viewer,
   firing,
+  environment,
+  kilns,
   ratePoints,
   estimate,
   onBack,
   onQuickReading,
+  onUpdateSetup,
   onFinishLiveFiring,
 }: {
   flow: ActiveAddFlow;
   viewer: Profile;
   firing?: FiringRecord;
+  environment?: FiringEnvironmentRecord;
+  kilns: KilnProfile[];
   ratePoints: ReturnType<typeof calculateRateOfChange>;
   estimate: ReturnType<typeof estimateFiringDuration>;
   onBack: () => void;
   onQuickReading: () => void;
+  onUpdateSetup: (firingId: string, payload: LiveFiringSetupPayload) => void;
   onFinishLiveFiring: (firingId: string) => void;
 }) {
   const latest = ratePoints.at(-1);
@@ -1297,7 +1509,166 @@ function LiveFiringAddFlow({
   const [noteDraft, setNoteDraft] = useState("");
   const [savedNote, setSavedNote] = useState("");
   const [photoName, setPhotoName] = useState("");
-  const [atmosphere, setAtmosphere] = useState(firing?.atmosphere ?? "oxidation");
+  const [atmosphere, setAtmosphere] = useState<AtmosphereType>(firing?.atmosphere ?? "oxidation");
+  const [kilnId, setKilnId] = useState(firing?.kilnId ?? kilns[0]?.id ?? "");
+  const [firingType, setFiringType] = useState<FiringType>(
+    firing?.firingType ?? kilns[0]?.kilnType ?? "electric",
+  );
+  const [fuelType, setFuelType] = useState(kilns.find((kiln) => kiln.id === firing?.kilnId)?.fuelType ?? "electric");
+  const [targetTemperatureC, setTargetTemperatureC] = useState(String(firing?.targetTemperatureC ?? 1222));
+  const [targetCone, setTargetCone] = useState(firing?.targetCone ?? "6");
+  const [kilnLocation, setKilnLocation] = useState<KilnLocation>(
+    environment?.kilnLocation ??
+      kilns.find((kiln) => kiln.id === firing?.kilnId)?.defaultLocation ??
+      "indoors",
+  );
+  const [locationLabel, setLocationLabel] = useState(environment?.locationLabel ?? viewer.locationLabel ?? "");
+  const [outsideTemperatureC, setOutsideTemperatureC] = useState(decimalInputValue(environment?.outsideStartTemperatureC));
+  const [outsideLowC, setOutsideLowC] = useState(decimalInputValue(environment?.outsideLowC));
+  const [outsideHighC, setOutsideHighC] = useState(decimalInputValue(environment?.outsideHighC));
+  const [indoorAmbientTemperatureC, setIndoorAmbientTemperatureC] = useState(
+    decimalInputValue(environment?.indoorAmbientTemperatureC ?? 22),
+  );
+  const [humidityStartPercentage, setHumidityStartPercentage] = useState(
+    decimalInputValue(environment?.humidityStartPercentage ?? 58),
+  );
+  const [humidityLowPercentage, setHumidityLowPercentage] = useState(decimalInputValue(environment?.humidityLowPercentage));
+  const [humidityHighPercentage, setHumidityHighPercentage] = useState(decimalInputValue(environment?.humidityHighPercentage));
+  const [windSpeedKph, setWindSpeedKph] = useState(decimalInputValue(environment?.windSpeedKph ?? 0));
+  const [windDirection, setWindDirection] = useState(environment?.windDirection ?? "");
+  const [windGustKph, setWindGustKph] = useState(decimalInputValue(environment?.windGustKph));
+  const [dewPointC, setDewPointC] = useState(decimalInputValue(environment?.dewPointC));
+  const [atmosphericPressureHpa, setAtmosphericPressureHpa] = useState(decimalInputValue(environment?.atmosphericPressureHpa));
+  const [surfacePressureHpa, setSurfacePressureHpa] = useState(decimalInputValue(environment?.surfacePressureHpa));
+  const [cloudCoverPercentage, setCloudCoverPercentage] = useState(decimalInputValue(environment?.cloudCoverPercentage));
+  const [precipitationMm, setPrecipitationMm] = useState(decimalInputValue(environment?.precipitationMm));
+  const [weatherCode, setWeatherCode] = useState(decimalInputValue(environment?.weatherCode));
+  const [rainConditions, setRainConditions] = useState(environment?.rainConditions ?? "dry");
+  const [ventilationNotes, setVentilationNotes] = useState(environment?.ventilationNotes ?? "");
+  const [weatherNotes, setWeatherNotes] = useState(environment?.weatherNotes ?? "");
+  const [weatherStatus, setWeatherStatus] = useState(environment?.weatherSource ?? "Manual reading");
+  const [latitude, setLatitude] = useState(decimalInputValue(environment?.latitude));
+  const [longitude, setLongitude] = useState(decimalInputValue(environment?.longitude));
+  const [setupSaved, setSetupSaved] = useState("");
+  const outdoorExposure = isOutdoorKilnLocation(kilnLocation);
+
+  const handleKilnChange = (nextKilnId: string) => {
+    const kiln = kilns.find((item) => item.id === nextKilnId);
+    setKilnId(nextKilnId);
+    if (!kiln) return;
+    setFiringType(kiln.kilnType);
+    setFuelType(kiln.fuelType);
+    setKilnLocation(kiln.defaultLocation);
+  };
+
+  const applyOutdoorLocationReading = async () => {
+    setWeatherStatus("Requesting location...");
+    if (!navigator.geolocation) {
+      setWeatherStatus("Location unavailable. Enter the outdoor reading manually.");
+      return;
+    }
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false,
+          maximumAge: 10 * 60 * 1000,
+          timeout: 12000,
+        });
+      });
+      const nextLatitude = Number(position.coords.latitude.toFixed(5));
+      const nextLongitude = Number(position.coords.longitude.toFixed(5));
+      const params = new URLSearchParams({
+        latitude: String(nextLatitude),
+        longitude: String(nextLongitude),
+        current:
+          "temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,rain,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+        temperature_unit: "celsius",
+        wind_speed_unit: "kmh",
+        precipitation_unit: "mm",
+        timezone: "auto",
+      });
+      const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+      if (!response.ok) throw new Error("Weather request failed.");
+      const weather = await response.json() as {
+        current?: Record<string, number | string | undefined>;
+      };
+      const current = weather.current ?? {};
+      const currentTemperature = typeof current.temperature_2m === "number" ? current.temperature_2m : undefined;
+      const currentHumidity = typeof current.relative_humidity_2m === "number" ? current.relative_humidity_2m : undefined;
+      const currentWind = typeof current.wind_speed_10m === "number" ? current.wind_speed_10m : undefined;
+      const currentWindGust = typeof current.wind_gusts_10m === "number" ? current.wind_gusts_10m : undefined;
+      const currentWindDirection =
+        typeof current.wind_direction_10m === "number" ? current.wind_direction_10m : undefined;
+      const currentWeatherCode = typeof current.weather_code === "number" ? current.weather_code : undefined;
+
+      setLatitude(String(nextLatitude));
+      setLongitude(String(nextLongitude));
+      setLocationLabel(`Device location ${nextLatitude}, ${nextLongitude}`);
+      setOutsideTemperatureC(decimalInputValue(currentTemperature));
+      setOutsideLowC(decimalInputValue(currentTemperature));
+      setOutsideHighC(decimalInputValue(currentTemperature));
+      setHumidityStartPercentage(decimalInputValue(currentHumidity));
+      setHumidityLowPercentage(decimalInputValue(currentHumidity));
+      setHumidityHighPercentage(decimalInputValue(currentHumidity));
+      setWindSpeedKph(decimalInputValue(currentWind));
+      setWindGustKph(decimalInputValue(currentWindGust));
+      setWindDirection(windDirectionFromDegrees(currentWindDirection));
+      setDewPointC(decimalInputValue(typeof current.dew_point_2m === "number" ? current.dew_point_2m : undefined));
+      setAtmosphericPressureHpa(decimalInputValue(typeof current.pressure_msl === "number" ? current.pressure_msl : undefined));
+      setSurfacePressureHpa(decimalInputValue(typeof current.surface_pressure === "number" ? current.surface_pressure : undefined));
+      setCloudCoverPercentage(decimalInputValue(typeof current.cloud_cover === "number" ? current.cloud_cover : undefined));
+      setPrecipitationMm(decimalInputValue(typeof current.precipitation === "number" ? current.precipitation : undefined));
+      setWeatherCode(decimalInputValue(currentWeatherCode));
+      setRainConditions(weatherCodeLabel(currentWeatherCode).toLowerCase());
+      setWeatherNotes(`${weatherCodeLabel(currentWeatherCode)} from current location weather.`);
+      setWeatherStatus("Outdoor reading added from location.");
+    } catch (error) {
+      setWeatherStatus(error instanceof Error ? error.message : "Location/weather unavailable. Enter reading manually.");
+    }
+  };
+
+  const saveSetup = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!firing) return;
+    const environmentPayload: FiringEnvironmentPayload = {
+      kilnLocation,
+      locationLabel: locationLabel.trim() || undefined,
+      latitude: parseOptionalNumber(latitude),
+      longitude: parseOptionalNumber(longitude),
+      observedAt: new Date().toISOString(),
+      weatherSource: weatherStatus.includes("location") ? "device location + Open-Meteo" : "manual",
+      outsideStartTemperatureC: outdoorExposure ? parseOptionalNumber(outsideTemperatureC) : undefined,
+      outsideLowC: outdoorExposure ? parseOptionalNumber(outsideLowC) : undefined,
+      outsideHighC: outdoorExposure ? parseOptionalNumber(outsideHighC) : undefined,
+      indoorAmbientTemperatureC: outdoorExposure ? undefined : parseOptionalNumber(indoorAmbientTemperatureC),
+      humidityStartPercentage: parseOptionalNumber(humidityStartPercentage),
+      humidityLowPercentage: parseOptionalNumber(humidityLowPercentage),
+      humidityHighPercentage: parseOptionalNumber(humidityHighPercentage),
+      windSpeedKph: parseOptionalNumber(windSpeedKph),
+      windDirection: windDirection.trim() || undefined,
+      windGustKph: parseOptionalNumber(windGustKph),
+      dewPointC: parseOptionalNumber(dewPointC),
+      atmosphericPressureHpa: parseOptionalNumber(atmosphericPressureHpa),
+      surfacePressureHpa: parseOptionalNumber(surfacePressureHpa),
+      cloudCoverPercentage: parseOptionalNumber(cloudCoverPercentage),
+      precipitationMm: parseOptionalNumber(precipitationMm),
+      weatherCode: parseOptionalNumber(weatherCode),
+      rainConditions: rainConditions.trim() || undefined,
+      ventilationNotes: ventilationNotes.trim() || undefined,
+      weatherNotes: weatherNotes.trim() || undefined,
+    };
+    onUpdateSetup(firing.id, {
+      kilnId,
+      firingType,
+      fuelType: fuelType.trim() || formatOptionLabel(FIRING_TYPE_OPTIONS, firingType),
+      targetTemperatureC: Number(targetTemperatureC),
+      targetCone: targetCone.trim() || firing.targetCone,
+      atmosphere,
+      environment: environmentPayload,
+    });
+    setSetupSaved("Kiln and atmospheric setup saved.");
+  };
 
   const saveNote = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1347,6 +1718,203 @@ function LiveFiringAddFlow({
           <span>Add temperature reading</span>
         </button>
       </section>
+      <form className="kb-panel kb-flow-card kb-form kb-live-setup" onSubmit={saveSetup}>
+        <div className="kb-section-title compact">
+          <div>
+            <p className="kb-kicker">Kiln and atmospheric setup</p>
+            <h3>Record the kiln type, exposure, and weather conditions.</h3>
+          </div>
+          <button type="submit" className="kb-quiet-button">
+            <Save size={17} />
+            <span>Save setup</span>
+          </button>
+        </div>
+        <div className="kb-form-grid">
+          <label>
+            <span>Kiln</span>
+            <span className="kb-select-wrap">
+              <select value={kilnId} onChange={(event) => handleKilnChange(event.target.value)}>
+                {kilns.map((kiln) => (
+                  <option key={kiln.id} value={kiln.id}>{kiln.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+          <label>
+            <span>Kiln type</span>
+            <span className="kb-select-wrap">
+              <select value={firingType} onChange={(event) => setFiringType(event.target.value as FiringType)}>
+                {FIRING_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+        </div>
+        <div className="kb-form-grid">
+          <label>
+            <span>Fuel or heat source</span>
+            <input value={fuelType} onChange={(event) => setFuelType(event.target.value)} />
+          </label>
+          <label>
+            <span>Firing atmosphere</span>
+            <span className="kb-select-wrap">
+              <select value={atmosphere} onChange={(event) => setAtmosphere(event.target.value as AtmosphereType)}>
+                {ATMOSPHERE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+        </div>
+        <div className="kb-form-grid">
+          <label>
+            <span>Target C</span>
+            <input type="number" value={targetTemperatureC} onChange={(event) => setTargetTemperatureC(event.target.value)} />
+          </label>
+          <label>
+            <span>Target cone</span>
+            <input value={targetCone} onChange={(event) => setTargetCone(event.target.value)} />
+          </label>
+        </div>
+        <div className="kb-form-grid">
+          <label>
+            <span>Kiln exposure</span>
+            <span className="kb-select-wrap">
+              <select value={kilnLocation} onChange={(event) => setKilnLocation(event.target.value as KilnLocation)}>
+                {KILN_LOCATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+          <label>
+            <span>Location label</span>
+            <input value={locationLabel} onChange={(event) => setLocationLabel(event.target.value)} />
+          </label>
+        </div>
+        {outdoorExposure ? (
+          <div className="kb-atmosphere-reading">
+            <div className="kb-flow-action-row">
+              <button type="button" className="kb-primary-button" onClick={applyOutdoorLocationReading}>
+                <CloudSun size={17} />
+                <span>Use outdoor location reading</span>
+              </button>
+              <span className="kb-muted-note">{weatherStatus}</span>
+            </div>
+            <div className="kb-form-grid">
+              <label>
+                <span>Latitude</span>
+                <input inputMode="decimal" value={latitude} onChange={(event) => setLatitude(event.target.value)} />
+              </label>
+              <label>
+                <span>Longitude</span>
+                <input inputMode="decimal" value={longitude} onChange={(event) => setLongitude(event.target.value)} />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Outside C</span>
+                <input type="number" value={outsideTemperatureC} onChange={(event) => setOutsideTemperatureC(event.target.value)} />
+              </label>
+              <label>
+                <span>Low C</span>
+                <input type="number" value={outsideLowC} onChange={(event) => setOutsideLowC(event.target.value)} />
+              </label>
+              <label>
+                <span>High C</span>
+                <input type="number" value={outsideHighC} onChange={(event) => setOutsideHighC(event.target.value)} />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Humidity %</span>
+                <input type="number" value={humidityStartPercentage} onChange={(event) => setHumidityStartPercentage(event.target.value)} />
+              </label>
+              <label>
+                <span>Humidity low %</span>
+                <input type="number" value={humidityLowPercentage} onChange={(event) => setHumidityLowPercentage(event.target.value)} />
+              </label>
+              <label>
+                <span>Humidity high %</span>
+                <input type="number" value={humidityHighPercentage} onChange={(event) => setHumidityHighPercentage(event.target.value)} />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Wind kph</span>
+                <input type="number" value={windSpeedKph} onChange={(event) => setWindSpeedKph(event.target.value)} />
+              </label>
+              <label>
+                <span>Gust kph</span>
+                <input type="number" value={windGustKph} onChange={(event) => setWindGustKph(event.target.value)} />
+              </label>
+              <label>
+                <span>Wind direction</span>
+                <input value={windDirection} onChange={(event) => setWindDirection(event.target.value)} />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Dew point C</span>
+                <input type="number" value={dewPointC} onChange={(event) => setDewPointC(event.target.value)} />
+              </label>
+              <label>
+                <span>Pressure hPa</span>
+                <input type="number" value={atmosphericPressureHpa} onChange={(event) => setAtmosphericPressureHpa(event.target.value)} />
+              </label>
+              <label>
+                <span>Surface hPa</span>
+                <input type="number" value={surfacePressureHpa} onChange={(event) => setSurfacePressureHpa(event.target.value)} />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Cloud cover %</span>
+                <input type="number" value={cloudCoverPercentage} onChange={(event) => setCloudCoverPercentage(event.target.value)} />
+              </label>
+              <label>
+                <span>Precip mm</span>
+                <input type="number" value={precipitationMm} onChange={(event) => setPrecipitationMm(event.target.value)} />
+              </label>
+              <label>
+                <span>Weather code</span>
+                <input type="number" value={weatherCode} onChange={(event) => setWeatherCode(event.target.value)} />
+              </label>
+            </div>
+            <label>
+              <span>Rain or weather conditions</span>
+              <input value={rainConditions} onChange={(event) => setRainConditions(event.target.value)} />
+            </label>
+          </div>
+        ) : (
+          <div className="kb-form-grid">
+            <label>
+              <span>Indoor ambient C</span>
+              <input type="number" value={indoorAmbientTemperatureC} onChange={(event) => setIndoorAmbientTemperatureC(event.target.value)} />
+            </label>
+            <label>
+              <span>Humidity %</span>
+              <input type="number" value={humidityStartPercentage} onChange={(event) => setHumidityStartPercentage(event.target.value)} />
+            </label>
+          </div>
+        )}
+        <div className="kb-form-grid">
+          <label>
+            <span>Ventilation notes</span>
+            <textarea value={ventilationNotes} onChange={(event) => setVentilationNotes(event.target.value)} />
+          </label>
+          <label>
+            <span>Weather notes</span>
+            <textarea value={weatherNotes} onChange={(event) => setWeatherNotes(event.target.value)} />
+          </label>
+        </div>
+        {setupSaved && <p className="kb-muted-note">{setupSaved}</p>}
+      </form>
       <div className="kb-flow-layout">
         <form className="kb-panel kb-flow-card kb-form" onSubmit={saveNote}>
           <label>
@@ -1404,6 +1972,10 @@ function LiveFiringAddFlow({
             <span>Logging interval <strong>{estimate.recommendedLoggingIntervalMinutes} min</strong></span>
             <span>Projected total <strong>{estimate.totalHoursRange[0]}-{estimate.totalHoursRange[1]} h</strong></span>
             <span>Readings <strong>{ratePoints.length}</strong></span>
+            <span>Kiln type <strong>{formatOptionLabel(FIRING_TYPE_OPTIONS, firingType)}</strong></span>
+            <span>Exposure <strong>{formatOptionLabel(KILN_LOCATION_OPTIONS, kilnLocation)}</strong></span>
+            <span>Humidity <strong>{humidityStartPercentage || "n/a"}%</strong></span>
+            <span>Wind <strong>{windSpeedKph || "0"} kph</strong></span>
             <span>
               Started{" "}
               <strong>{new Date(flow.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getEntitlementDecision } from "../lib/entitlements";
+import { readClientSupabaseEnv } from "../lib/env";
 import { calculateRateOfChange, estimateFiringDuration } from "../lib/firing-calculator";
 import { rankPopularPosts, scorePopularPost } from "../lib/feed-ranking";
 import { canViewRecord } from "../lib/privacy";
@@ -89,6 +90,16 @@ test("entitlement decisions are centralized", () => {
   assert.equal(getEntitlementDecision("business", "cost_tracking").allowed, true);
   assert.equal(getEntitlementDecision("business", "material_inventory").allowed, true);
   assert.equal(getEntitlementDecision("professional", "advanced_export").allowed, false);
+});
+
+test("client Supabase env accepts public browser keys", () => {
+  const parsed = readClientSupabaseEnv({
+    NEXT_PUBLIC_SUPABASE_URL: "https://kdfpkgxziwfxkseteqqv.supabase.co",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_test_key",
+    NEXT_PUBLIC_APP_URL: "https://fluxandfire.app",
+  });
+
+  assert.equal(parsed.success, true);
 });
 
 test("business launch offer preserves 2026 free upgrade and 2027 price", () => {

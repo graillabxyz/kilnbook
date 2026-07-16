@@ -276,6 +276,12 @@ export interface FiringEnvironmentRecord {
   id: ID;
   firingId: ID;
   kilnLocation: KilnLocation;
+  locationLabel?: string;
+  latitude?: number;
+  longitude?: number;
+  elevationMeters?: number;
+  observedAt?: string;
+  weatherSource?: string;
   outsideStartTemperatureC?: number;
   outsideLowC?: number;
   outsideHighC?: number;
@@ -286,6 +292,12 @@ export interface FiringEnvironmentRecord {
   windSpeedKph?: number;
   windDirection?: string;
   windGustKph?: number;
+  dewPointC?: number;
+  atmosphericPressureHpa?: number;
+  surfacePressureHpa?: number;
+  cloudCoverPercentage?: number;
+  precipitationMm?: number;
+  weatherCode?: number;
   rainConditions?: string;
   ventilationNotes?: string;
   weatherNotes?: string;

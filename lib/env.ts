@@ -9,13 +9,20 @@ export const envSchema = z.object({
 
 export type KilnbookEnv = z.infer<typeof envSchema>;
 
-export function readClientSupabaseEnv(source: NodeJS.ProcessEnv = process.env) {
+export function readClientSupabaseEnv(source?: NodeJS.ProcessEnv) {
+  const publicEnv = source ?? {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY:
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  };
+
   return envSchema
     .pick({
       NEXT_PUBLIC_SUPABASE_URL: true,
       NEXT_PUBLIC_SUPABASE_ANON_KEY: true,
       NEXT_PUBLIC_APP_URL: true,
     })
-    .safeParse(source);
+    .safeParse(publicEnv);
 }
-
