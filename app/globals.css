@@ -248,6 +248,10 @@ button:disabled {
   backdrop-filter: blur(18px);
 }
 
+.kb-header-simple {
+  grid-template-columns: minmax(9rem, 1fr);
+}
+
 .kb-kicker {
   margin: 0 0 0.25rem;
   color: var(--kb-cobalt);
@@ -523,6 +527,191 @@ button:disabled {
   margin-top: 0.85rem;
 }
 
+.kb-add-flow {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.kb-flow-hero {
+  display: grid;
+  gap: 0.85rem;
+  border: 1px solid var(--kb-line);
+  border-radius: var(--kb-radius);
+  background:
+    linear-gradient(135deg, rgba(255, 248, 239, 0.94), rgba(255, 253, 249, 0.74)),
+    var(--kb-surface);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7), var(--kb-shadow);
+  padding: 1rem;
+}
+
+.kb-flow-back {
+  min-height: 2.35rem;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.82);
+  color: var(--kb-muted);
+  padding: 0 0.72rem;
+  font-weight: 600;
+}
+
+.kb-flow-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.kb-flow-heading > svg {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 8px;
+  padding: 0.62rem;
+  background: var(--kb-terracotta);
+  color: #fffdf9;
+}
+
+.kb-flow-heading h2 {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 2.35rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.kb-flow-heading p:last-child {
+  max-width: 48rem;
+  margin: 0.45rem 0 0;
+  color: var(--kb-muted);
+  line-height: 1.5;
+}
+
+.kb-flow-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.62fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.kb-flow-card textarea {
+  min-height: 7rem;
+  resize: vertical;
+  padding: 0.72rem;
+}
+
+.kb-flow-sidebar {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.kb-flow-sidebar h3 {
+  margin: 0;
+}
+
+.kb-flow-visibility {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.kb-flow-visibility button {
+  min-height: 5.1rem;
+  display: grid;
+  gap: 0.24rem;
+  align-content: start;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.78);
+  color: var(--kb-muted);
+  padding: 0.65rem;
+  text-align: left;
+}
+
+.kb-flow-visibility button.active {
+  border-color: rgba(163, 67, 36, 0.42);
+  background: var(--kb-ivory);
+  color: var(--kb-ink);
+  box-shadow: inset 0 0 0 1px rgba(163, 67, 36, 0.12);
+}
+
+.kb-flow-visibility strong {
+  color: var(--kb-ink);
+  font-weight: 700;
+}
+
+.kb-flow-visibility span {
+  font-size: 0.78rem;
+  line-height: 1.32;
+}
+
+.kb-live-start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.35fr);
+  gap: 1rem;
+  align-items: stretch;
+  background: var(--kb-warm-panel);
+}
+
+.kb-live-start-main {
+  display: grid;
+  gap: 0.45rem;
+  align-content: center;
+}
+
+.kb-live-start-main h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 5rem;
+  font-weight: 700;
+  line-height: 0.92;
+}
+
+.kb-live-start-main p {
+  margin: 0;
+  color: var(--kb-muted);
+}
+
+.kb-flow-primary-action {
+  min-height: 100%;
+  border: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.48rem;
+  background: var(--kb-ink);
+  color: #fffdf9;
+  padding: 1rem;
+  font-weight: 700;
+}
+
+.kb-flow-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.kb-flow-upload {
+  min-height: 10rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  border: 1px dashed var(--kb-line-strong);
+  border-radius: 8px;
+  background: var(--kb-warm-highlight);
+  color: var(--kb-muted);
+  font-weight: 700;
+}
+
+.kb-flow-upload svg {
+  color: var(--kb-terracotta);
+}
+
 .kb-grid-two {
   display: grid;
   grid-template-columns: minmax(0, 1.48fr) minmax(20rem, 0.72fr);
@@ -545,6 +734,59 @@ button:disabled {
   background: rgba(255, 253, 249, 0.83);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7), var(--kb-shadow);
   padding: 1rem;
+}
+
+.kb-add-flow .kb-flow-hero {
+  border-color: rgba(163, 67, 36, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 248, 239, 0.96), rgba(255, 253, 249, 0.8)),
+    var(--kb-surface);
+}
+
+.kb-add-flow .kb-flow-back {
+  width: max-content;
+  min-height: 2.35rem;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.42rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.kb-add-flow .kb-flow-back svg,
+.kb-add-flow .kb-flow-primary-action svg {
+  flex: 0 0 auto;
+}
+
+.kb-panel.kb-live-start {
+  display: grid;
+  background: var(--kb-warm-panel);
+}
+
+.kb-add-flow .kb-flow-primary-action {
+  min-height: 7rem;
+  border: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  background: var(--kb-ink);
+  color: #fffdf9;
+  text-align: center;
+}
+
+.kb-add-flow .kb-flow-visibility button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.kb-add-flow .kb-flow-visibility strong,
+.kb-add-flow .kb-flow-visibility span {
+  display: block;
 }
 
 .kb-add-draft-list {
@@ -663,6 +905,7 @@ button:disabled {
 
 .kb-composer textarea,
 .kb-form input,
+.kb-form textarea,
 .kb-form select,
 .kb-select-wrap select,
 .kb-message-compose input,
@@ -1688,6 +1931,15 @@ button:disabled {
   .kb-grid-two.equal {
     grid-template-columns: 1fr;
   }
+
+  .kb-flow-layout,
+  .kb-live-start {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-add-flow .kb-flow-primary-action {
+    min-height: 4.6rem;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1877,6 +2129,63 @@ button:disabled {
   .kb-add-option,
   .kb-add-visibility-grid button {
     min-height: auto;
+  }
+
+  .kb-add-flow {
+    gap: 0.75rem;
+  }
+
+  .kb-flow-hero,
+  .kb-flow-card,
+  .kb-flow-sidebar,
+  .kb-live-start {
+    border-radius: 0;
+    margin-left: -0.85rem;
+    margin-right: -0.85rem;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
+  }
+
+  .kb-flow-hero {
+    padding: 0.85rem;
+  }
+
+  .kb-flow-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-flow-heading > svg {
+    width: 2.45rem;
+    height: 2.45rem;
+  }
+
+  .kb-flow-heading h2 {
+    font-size: 1.85rem;
+  }
+
+  .kb-flow-layout,
+  .kb-live-start,
+  .kb-flow-visibility {
+    grid-template-columns: 1fr;
+  }
+
+  .kb-live-start-main h2 {
+    font-size: 3.4rem;
+  }
+
+  .kb-add-flow .kb-flow-primary-action {
+    min-height: 4.8rem;
+  }
+
+  .kb-add-flow .kb-flow-visibility button {
+    min-height: 4.55rem;
+    padding: 0.68rem 0.75rem;
+  }
+
+  .kb-flow-action-row {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .kb-add-actions .kb-primary-button,

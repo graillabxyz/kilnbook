@@ -109,9 +109,14 @@ test("mobile add and navigation follow the simplified Instagram-style order", as
 
   assert.match(product, /"Home",\n  "Explore",\n  "Add",\n  "Search",\n  "Profile"/);
   assert.match(workspace, /onConfirm\(option\.kind, "public"\)/);
-  assert.match(workspace, /MOBILE_SCROLL_VIEWS = new Set<View>\(\["Home", "Explore", "Profile", "Settings"\]\)/);
+  assert.match(workspace, /MOBILE_SCROLL_VIEWS = new Set<View>\(\["Home", "Explore", "Profile", "Settings", "Add"\]\)/);
   assert.match(workspace, /const items: MobileNavItem\[\] = \[\n    \{ label: "Home"/);
   assert.match(workspace, /\{ label: "Add", icon: Plus, action: "add" \},\n    \{ label: "Search"/);
+  assert.match(workspace, /type ActiveAddFlow/);
+  assert.match(workspace, /Live tracker is running/);
+  assert.match(workspace, /Save glaze recipe/);
+  assert.match(workspace, /Save previous firing/);
+  assert.match(workspace, /Save glaze result/);
   assert.match(globals, /grid-template-columns: repeat\(5, 20%\)/);
   assert.match(globals, /\.kb-main-scrollable > :not\(\.kb-header\)/);
   assert.match(globals, /overflow-y: auto/);

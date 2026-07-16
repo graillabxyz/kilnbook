@@ -3,9 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Activity,
+  ArrowLeft,
   BarChart3,
   Bell,
   BookOpen,
+  CalendarDays,
   Camera,
   CheckCircle2,
   ChevronDown,
@@ -24,12 +26,16 @@ import {
   MessageCircle,
   Microscope,
   Plus,
+  Save,
   Search,
   Send,
   Settings,
   ShieldCheck,
   Sparkles,
+  Square,
+  Star,
   Thermometer,
+  Upload,
   UserRound,
   Wind,
   type LucideIcon,
@@ -76,7 +82,8 @@ import { profileFromSupabaseUser } from "@/lib/supabase/auth-profile";
 import { BUSINESS_LAUNCH_OFFER, formatPlanLabel } from "@/lib/subscriptions";
 import { formatTemperature } from "@/lib/units";
 
-type View = PrimaryNavigationItem | "Library";
+type View = PrimaryNavigationItem | "Library" | "Add";
+type AddVisibility = Extract<Visibility, "private" | "followers" | "public">;
 type AuthStatus =
   | { state: "loading"; message: string }
   | { state: "signed-in"; message: string }
@@ -87,10 +94,43 @@ type AddKind = "glaze_recipe" | "live_firing" | "previous_firing" | "glaze_resul
 type AddDraft = {
   id: string;
   kind: AddKind;
-  visibility: Extract<Visibility, "private" | "followers" | "public">;
+  visibility: AddVisibility;
   title: string;
   detail: string;
   createdAt: string;
+};
+type ActiveAddFlow = {
+  kind: AddKind;
+  visibility: AddVisibility;
+  startedAt: string;
+  firingId?: string;
+};
+type PreviousFiringPayload = {
+  title: string;
+  kilnId: string;
+  glazeId: string;
+  clayBodyId: string;
+  targetTemperatureC: number;
+  targetCone: string;
+  actualStartAt: string;
+  visibility: AddVisibility;
+  notes: string;
+};
+type GlazeRecipePayload = {
+  title: string;
+  coneRange: string;
+  baseMaterial: string;
+  accentMaterial: string;
+  visibility: AddVisibility;
+};
+type GlazeResultPayload = {
+  title: string;
+  firingId: string;
+  glazeId: string;
+  clayBodyId: string;
+  rating: number;
+  visibility: AddVisibility;
+  imageName?: string;
 };
 
 type MobileNavItem =
@@ -98,7 +138,7 @@ type MobileNavItem =
   | { label: "Add"; icon: LucideIcon; action: "add" }
   | { label: "Search"; icon: LucideIcon; action: "search" };
 
-const MOBILE_SCROLL_VIEWS = new Set<View>(["Home", "Explore", "Profile", "Settings"]);
+const MOBILE_SCROLL_VIEWS = new Set<View>(["Home", "Explore", "Profile", "Settings", "Add"]);
 
 const firingFormSchema = z.object({
   title: z.string().min(3, "Give the firing a clear title."),
@@ -161,6 +201,7 @@ export function KilnbookWorkspace({
   const [query, setQuery] = useState("");
   const [addChooserOpen, setAddChooserOpen] = useState(false);
   const [addDrafts, setAddDrafts] = useState<AddDraft[]>([]);
+  const [activeAddFlow, setActiveAddFlow] = useState<ActiveAddFlow | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -333,6 +374,81 @@ export function KilnbookWorkspace({
     setSelectedFiringId(newFiring.id);
   };
 
+  const navigateToView = (nextView: View) => {
+    setActiveAddFlow(null);
+    setView(nextView === "Add" ? "Home" : nextView);
+  };
+
+  const recordAddDraft = (
+    kind: AddKind,
+    visibility: AddVisibility,
+    title: string,
+    detail: string,
+  ) => {
+    setAddDrafts((items) => [
+      {
+        id: `add-${kind}-${Date.now()}`,
+        kind,
+        visibility,
+        title,
+        detail,
+        createdAt: new Date().toISOString(),
+      },
+      ...items,
+    ]);
+  };
+
+  const createAddFiring = (
+    kind: Extract<AddKind, "live_firing" | "previous_firing">,
+    visibility: AddVisibility,
+    createdAt: string,
+    payload?: Partial<PreviousFiringPayload>,
+  ) => {
+    const kiln = snapshot.kilns.find((item) => item.id === payload?.kilnId) ?? snapshot.kilns[0];
+    const newFiring: FiringRecord = {
+      id: `firing-add-${Date.now()}`,
+      ownerId: viewer.id,
+      title:
+        payload?.title ??
+        (kind === "live_firing"
+          ? `Live firing ${new Date(createdAt).toLocaleDateString()}`
+          : "Previous firing record"),
+      readableNumber: `Firing ${String(firings.length + 40).padStart(3, "0")}`,
+      kilnId: kiln?.id ?? "kiln-draft",
+      kilnNameSnapshot: kiln?.name ?? "Select kiln",
+      kilnSpecSnapshot: kiln
+        ? `${kiln.manufacturer} ${kiln.model}, ${kiln.usableVolumeLiters} L`
+        : "Kiln details pending",
+      firingType: kiln?.kilnType ?? "electric",
+      status: kind === "live_firing" ? "in_progress" : "completed",
+      visibility,
+      plannedStartAt: createdAt,
+      actualStartAt: payload?.actualStartAt ?? (kind === "live_firing" ? createdAt : undefined),
+      actualEndAt:
+        kind === "previous_firing"
+          ? new Date(new Date(payload?.actualStartAt ?? createdAt).getTime() + 10 * 60 * 60 * 1000).toISOString()
+          : undefined,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      leadFirer: viewer.displayName,
+      targetTemperatureC: payload?.targetTemperatureC ?? 1222,
+      targetCone: payload?.targetCone ?? "6",
+      atmosphere: kiln?.kilnType === "gas" ? "reduction" : "oxidation",
+      loadFullnessPercentage: kind === "live_firing" ? 48 : 64,
+      totalHeatingMinutes: kind === "previous_firing" ? 620 : undefined,
+      totalCoolingMinutes: kind === "previous_firing" ? 840 : undefined,
+      successRating: kind === "previous_firing" ? 82 : undefined,
+      notes:
+        payload?.notes ||
+        (kind === "live_firing"
+          ? "Live firing started from the Add flow."
+          : "Previous firing backfilled from the Add flow."),
+    };
+
+    setFirings((items) => [newFiring, ...items]);
+    setSelectedFiringId(newFiring.id);
+    return newFiring;
+  };
+
   const handleGoogleSignIn = async () => {
     setAuthStatus({ state: "loading", message: "Opening Google sign-in." });
     const { error } = await signInWithGoogle("/");
@@ -356,108 +472,148 @@ export function KilnbookWorkspace({
 
   const handleAddChoice = (
     kind: AddKind,
-    visibility: Extract<Visibility, "private" | "followers" | "public">,
+    visibility: AddVisibility,
   ) => {
     const now = new Date();
     const createdAt = now.toISOString();
-    const draftMeta: Record<AddKind, Pick<AddDraft, "title" | "detail">> = {
-      glaze_recipe: {
-        title: "New glaze recipe",
-        detail:
-          visibility === "private"
-            ? "Recipe draft saved for your eyes only."
-            : "Recipe draft ready to share with the community.",
-      },
-      live_firing: {
-        title: "Live firing tracking",
-        detail: "Live firing data draft started with readings, notes, and photos ready.",
-      },
-      previous_firing: {
-        title: "Previous firing record",
-        detail: "Backfill draft started for an older firing and connected results.",
-      },
-      glaze_result: {
-        title: "Glaze result",
-        detail: "Result draft ready for images, clay body, firing, and glaze tags.",
-      },
-    };
-    const draft: AddDraft = {
-      id: `add-${kind}-${now.getTime()}`,
-      kind,
-      visibility,
-      createdAt,
-      ...draftMeta[kind],
-    };
+    let firingId: string | undefined;
 
-    setAddDrafts((items) => [draft, ...items]);
-
-    if (kind === "live_firing" || kind === "previous_firing") {
-      const kiln = snapshot.kilns[0];
-      const newFiring: FiringRecord = {
-        id: `firing-add-${now.getTime()}`,
-        ownerId: viewer.id,
-        title: kind === "live_firing" ? "Live firing tracking" : "Previous firing record",
-        readableNumber: `Firing ${String(firings.length + 40).padStart(3, "0")}`,
-        kilnId: kiln?.id ?? "kiln-draft",
-        kilnNameSnapshot: kiln?.name ?? "Select kiln",
-        kilnSpecSnapshot: kiln
-          ? `${kiln.manufacturer} ${kiln.model}, ${kiln.usableVolumeLiters} L`
-          : "Kiln details pending",
-        firingType: kiln?.kilnType ?? "electric",
-        status: kind === "live_firing" ? "in_progress" : "completed",
+    if (kind === "live_firing") {
+      const firing = createAddFiring("live_firing", visibility, createdAt);
+      firingId = firing.id;
+      setLiveReadings((points) => [
+        ...points,
+        {
+          id: `log-${firing.id}-${now.getTime()}`,
+          firingId: firing.id,
+          timestamp: createdAt,
+          elapsedMinutes: 0,
+          targetTemperatureC: firing.targetTemperatureC,
+          actualTemperatureC: 24,
+          atmosphere: firing.atmosphere,
+          notes: "Live firing started.",
+          manual: true,
+        },
+      ]);
+      recordAddDraft(
+        "live_firing",
         visibility,
-        plannedStartAt: createdAt,
-        actualStartAt: kind === "previous_firing" ? createdAt : undefined,
-        actualEndAt:
-          kind === "previous_firing"
-            ? new Date(now.getTime() + 10 * 60 * 60 * 1000).toISOString()
-            : undefined,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        leadFirer: viewer.displayName,
-        targetTemperatureC: 1222,
-        targetCone: "6",
-        atmosphere: kiln?.kilnType === "gas" ? "reduction" : "oxidation",
-        loadFullnessPercentage: 50,
-        totalHeatingMinutes: kind === "previous_firing" ? 620 : undefined,
-        totalCoolingMinutes: kind === "previous_firing" ? 840 : undefined,
-        notes:
-          kind === "live_firing"
-            ? "Started from the global Add flow for live tracking."
-            : "Started from the global Add flow as a previous firing.",
-      };
-
-      setFirings((items) => [newFiring, ...items]);
-      setSelectedFiringId(newFiring.id);
-      setView("Firings");
-    } else {
-      setView("Glazes");
+        firing.title,
+        "Live tracker started. Add temperature readings as the firing progresses.",
+      );
     }
 
+    setActiveAddFlow({ kind, visibility, startedAt: createdAt, firingId });
     setAddChooserOpen(false);
   };
 
+  const handleSaveGlazeRecipe = (payload: GlazeRecipePayload) => {
+    recordAddDraft(
+      "glaze_recipe",
+      payload.visibility,
+      payload.title,
+      `${payload.coneRange} recipe with ${payload.baseMaterial} and ${payload.accentMaterial}.`,
+    );
+    setActiveAddFlow(null);
+    setView("Glazes");
+  };
+
+  const handleSavePreviousFiring = (payload: PreviousFiringPayload) => {
+    const firing = createAddFiring("previous_firing", payload.visibility, new Date().toISOString(), payload);
+    recordAddDraft(
+      "previous_firing",
+      payload.visibility,
+      firing.title,
+      `Backfilled ${firing.readableNumber} with ${payload.glazeId} and ${payload.clayBodyId}.`,
+    );
+    setActiveAddFlow(null);
+    setView("Firings");
+  };
+
+  const handleSaveGlazeResult = (payload: GlazeResultPayload) => {
+    const glaze = snapshot.glazes.find((item) => item.id === payload.glazeId);
+    const firing = firings.find((item) => item.id === payload.firingId);
+    recordAddDraft(
+      "glaze_result",
+      payload.visibility,
+      payload.title,
+      `${payload.rating}/100 result${payload.imageName ? ` with ${payload.imageName}` : ""}${firing ? ` linked to ${firing.readableNumber}` : ""}${glaze ? ` for ${glaze.name}` : ""}.`,
+    );
+    setActiveAddFlow(null);
+    setView("Glazes");
+  };
+
+  const handleFinishLiveFiring = (firingId: string) => {
+    const finishedAt = new Date().toISOString();
+    setFirings((items) =>
+      items.map((firing) =>
+        firing.id === firingId
+          ? {
+              ...firing,
+              status: "completed",
+              actualEndAt: finishedAt,
+              totalHeatingMinutes: Math.max(ratePoints.at(-1)?.elapsedMinutes ?? 0, 30),
+              totalCoolingMinutes: 0,
+            }
+          : firing,
+      ),
+    );
+    const firing = firings.find((item) => item.id === firingId);
+    const draftVisibility: AddVisibility =
+      firing?.visibility === "private" || firing?.visibility === "followers" || firing?.visibility === "public"
+        ? firing.visibility
+        : "public";
+    recordAddDraft(
+      "live_firing",
+      draftVisibility,
+      firing?.title ?? "Completed live firing",
+      "Live firing ended and saved to the firing journal.",
+    );
+    setActiveAddFlow(null);
+    setView("Firings");
+  };
+
+  const displayView: View = activeAddFlow ? "Add" : view;
   const mainClassName = [
     "kb-main",
-    view === "Home" ? "kb-main-home" : "",
-    MOBILE_SCROLL_VIEWS.has(view) ? "kb-main-scrollable" : "kb-main-contained",
+    displayView === "Home" ? "kb-main-home" : "",
+    MOBILE_SCROLL_VIEWS.has(displayView) ? "kb-main-scrollable" : "kb-main-contained",
   ].filter(Boolean).join(" ");
 
   return (
     <main className="kb-app-root min-h-screen bg-[var(--kb-bg)] text-[var(--kb-ink)]">
       <div className="kb-shell">
-        <Sidebar view={view} onViewChange={setView} />
+        <Sidebar view={displayView} onViewChange={navigateToView} />
         <section className={mainClassName}>
           <Header
             viewerName={viewer.displayName}
-            view={view}
+            view={displayView}
             query={query}
             onQueryChange={setQuery}
             onCreate={() => setAddChooserOpen(true)}
-            onOpenNotifications={() => setView("Settings")}
-            onOpenProfile={() => setView("Profile")}
-            onSearchSubmit={() => setView("Explore")}
+            onOpenNotifications={() => navigateToView("Settings")}
+            onOpenProfile={() => navigateToView("Profile")}
+            onSearchSubmit={() => navigateToView("Explore")}
           />
-          {view === "Home" && (
+          {activeAddFlow ? (
+            <AddFlowScreen
+              flow={activeAddFlow}
+              viewer={viewer}
+              firings={firings}
+              activeFiring={firings.find((firing) => firing.id === activeAddFlow.firingId)}
+              kilns={snapshot.kilns}
+              glazes={snapshot.glazes}
+              clayBodies={snapshot.clayBodies}
+              ratePoints={ratePoints}
+              estimate={estimate}
+              onBack={() => setActiveAddFlow(null)}
+              onQuickReading={handleQuickReading}
+              onSaveGlazeRecipe={handleSaveGlazeRecipe}
+              onSavePreviousFiring={handleSavePreviousFiring}
+              onSaveGlazeResult={handleSaveGlazeResult}
+              onFinishLiveFiring={handleFinishLiveFiring}
+            />
+          ) : view === "Home" ? (
             <HomeScreen
               feedTab={feedTab}
               onFeedTabChange={setFeedTab}
@@ -465,14 +621,14 @@ export function KilnbookWorkspace({
               firings={firings}
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
-              onOpenExplore={() => setView("Explore")}
+              onOpenExplore={() => navigateToView("Explore")}
               viewer={viewer}
               authStatus={authStatus}
               onGoogleSignIn={handleGoogleSignIn}
               onSignOut={handleSignOut}
             />
-          )}
-          {view === "Dashboard" && (
+          ) : null}
+          {!activeAddFlow && view === "Dashboard" && (
             <DashboardScreen
               firings={firings}
               glazes={snapshot.glazes}
@@ -481,7 +637,7 @@ export function KilnbookWorkspace({
               ratePoints={ratePoints}
             />
           )}
-          {view === "Firings" && selectedFiring && (
+          {!activeAddFlow && view === "Firings" && selectedFiring && (
             <FiringsScreen
               firings={firings}
               selectedFiring={selectedFiring}
@@ -501,7 +657,7 @@ export function KilnbookWorkspace({
               onTagsChange={setImageTags}
             />
           )}
-          {view === "Glazes" && (
+          {!activeAddFlow && view === "Glazes" && (
             <GlazesScreen
               glazes={snapshot.glazes}
               recipes={snapshot.glazeRecipeVersions}
@@ -513,7 +669,7 @@ export function KilnbookWorkspace({
               )}
             />
           )}
-          {view === "Clay Bodies" && (
+          {!activeAddFlow && view === "Clay Bodies" && (
             <ClayBodiesScreen
               clayBodies={snapshot.clayBodies}
               glazes={snapshot.glazes}
@@ -521,10 +677,10 @@ export function KilnbookWorkspace({
               firings={firings}
             />
           )}
-          {view === "Kilns" && (
+          {!activeAddFlow && view === "Kilns" && (
             <KilnsScreen kilns={snapshot.kilns} firings={firings} />
           )}
-          {view === "Explore" && (
+          {!activeAddFlow && view === "Explore" && (
             <ExploreScreen
               query={query}
               profiles={snapshot.profiles}
@@ -534,10 +690,10 @@ export function KilnbookWorkspace({
               firings={firings}
             />
           )}
-          {view === "Messages" && (
+          {!activeAddFlow && view === "Messages" && (
             <MessagesScreen conversations={snapshot.conversations} />
           )}
-          {view === "Analytics" && (
+          {!activeAddFlow && view === "Analytics" && (
             <AnalyticsScreen
               plan={viewer.subscriptionTier}
               firings={firings}
@@ -545,7 +701,7 @@ export function KilnbookWorkspace({
               clayBodies={snapshot.clayBodies}
             />
           )}
-          {view === "Profile" && (
+          {!activeAddFlow && view === "Profile" && (
             <ProfileScreen
               viewer={viewer}
               posts={snapshot.posts}
@@ -553,8 +709,8 @@ export function KilnbookWorkspace({
               onOpenSettings={() => setView("Settings")}
             />
           )}
-          {view === "Settings" && <SettingsScreen viewer={viewer} />}
-          {view === "Library" && (
+          {!activeAddFlow && view === "Settings" && <SettingsScreen viewer={viewer} />}
+          {!activeAddFlow && view === "Library" && (
             <LibraryScreen
               glazes={snapshot.glazes}
               clayBodies={snapshot.clayBodies}
@@ -565,10 +721,10 @@ export function KilnbookWorkspace({
         </section>
       </div>
       <MobileNav
-        view={view}
-        onViewChange={setView}
+        view={displayView}
+        onViewChange={navigateToView}
         onAdd={() => setAddChooserOpen(true)}
-        onSearch={() => setView("Explore")}
+        onSearch={() => navigateToView("Explore")}
       />
       {addChooserOpen && (
         <AddChooser
@@ -646,8 +802,15 @@ function Header({
   onOpenProfile: () => void;
   onSearchSubmit: () => void;
 }) {
+  const isAddView = view === "Add";
   return (
-    <header className={view === "Home" ? "kb-header kb-home-header" : "kb-header"}>
+    <header
+      className={[
+        "kb-header",
+        view === "Home" ? "kb-home-header" : "",
+        isAddView ? "kb-header-simple" : "",
+      ].filter(Boolean).join(" ")}
+    >
       <div className="kb-title-lockup">
         <Image className="kb-header-logo" src={BRAND_ASSETS.logo} alt="" width={40} height={40} />
         <div>
@@ -671,6 +834,7 @@ function Header({
       </div>
       <form
         className="kb-search"
+        hidden={isAddView}
         onSubmit={(event) => {
           event.preventDefault();
           onSearchSubmit();
@@ -684,7 +848,7 @@ function Header({
           placeholder="Search firings, glazes, clay bodies"
         />
       </form>
-      <div className="kb-header-actions">
+      <div className="kb-header-actions" hidden={isAddView}>
         <button
           type="button"
           className="kb-icon-button"
@@ -713,12 +877,11 @@ function AddChooser({
   onClose: () => void;
   onConfirm: (
     kind: AddKind,
-    visibility: Extract<Visibility, "private" | "followers" | "public">,
+    visibility: AddVisibility,
   ) => void;
 }) {
   const [kind, setKind] = useState<AddKind>("glaze_recipe");
-  const [visibility, setVisibility] =
-    useState<Extract<Visibility, "private" | "followers" | "public">>("public");
+  const [visibility, setVisibility] = useState<AddVisibility>("public");
   const addOptions: Array<{
     kind: AddKind;
     title: string;
@@ -751,7 +914,7 @@ function AddChooser({
     },
   ];
   const visibilityOptions: Array<{
-    visibility: Extract<Visibility, "private" | "followers" | "public">;
+    visibility: AddVisibility;
     title: string;
     body: string;
   }> = [
@@ -861,6 +1024,642 @@ function AddChooser({
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function AddFlowScreen({
+  flow,
+  viewer,
+  firings,
+  activeFiring,
+  kilns,
+  glazes,
+  clayBodies,
+  ratePoints,
+  estimate,
+  onBack,
+  onQuickReading,
+  onSaveGlazeRecipe,
+  onSavePreviousFiring,
+  onSaveGlazeResult,
+  onFinishLiveFiring,
+}: {
+  flow: ActiveAddFlow;
+  viewer: Profile;
+  firings: FiringRecord[];
+  activeFiring?: FiringRecord;
+  kilns: KilnProfile[];
+  glazes: GlazeProfile[];
+  clayBodies: ClayBodyProfile[];
+  ratePoints: ReturnType<typeof calculateRateOfChange>;
+  estimate: ReturnType<typeof estimateFiringDuration>;
+  onBack: () => void;
+  onQuickReading: () => void;
+  onSaveGlazeRecipe: (payload: GlazeRecipePayload) => void;
+  onSavePreviousFiring: (payload: PreviousFiringPayload) => void;
+  onSaveGlazeResult: (payload: GlazeResultPayload) => void;
+  onFinishLiveFiring: (firingId: string) => void;
+}) {
+  const shared = {
+    flow,
+    viewer,
+    onBack,
+  };
+
+  if (flow.kind === "live_firing") {
+    return (
+      <LiveFiringAddFlow
+        {...shared}
+        firing={activeFiring}
+        ratePoints={ratePoints}
+        estimate={estimate}
+        onQuickReading={onQuickReading}
+        onFinishLiveFiring={onFinishLiveFiring}
+      />
+    );
+  }
+
+  if (flow.kind === "previous_firing") {
+    return (
+      <PreviousFiringAddFlow
+        {...shared}
+        kilns={kilns}
+        glazes={glazes}
+        clayBodies={clayBodies}
+        onSave={onSavePreviousFiring}
+      />
+    );
+  }
+
+  if (flow.kind === "glaze_result") {
+    return (
+      <GlazeResultAddFlow
+        {...shared}
+        firings={firings}
+        glazes={glazes}
+        clayBodies={clayBodies}
+        onSave={onSaveGlazeResult}
+      />
+    );
+  }
+
+  return (
+    <GlazeRecipeAddFlow
+      {...shared}
+      glazes={glazes}
+      onSave={onSaveGlazeRecipe}
+    />
+  );
+}
+
+function AddFlowHero({
+  icon: Icon,
+  kicker,
+  title,
+  body,
+  onBack,
+}: {
+  icon: LucideIcon;
+  kicker: string;
+  title: string;
+  body: string;
+  onBack: () => void;
+}) {
+  return (
+    <section className="kb-flow-hero">
+      <button type="button" className="kb-flow-back" onClick={onBack}>
+        <ArrowLeft size={18} />
+        <span>Back</span>
+      </button>
+      <div className="kb-flow-heading">
+        <Icon size={24} aria-hidden="true" />
+        <div>
+          <p className="kb-kicker">{kicker}</p>
+          <h2>{title}</h2>
+          <p>{body}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function VisibilitySelector({
+  value,
+  onChange,
+}: {
+  value: AddVisibility;
+  onChange: (visibility: AddVisibility) => void;
+}) {
+  const options: Array<{ value: AddVisibility; label: string; detail: string }> = [
+    { value: "public", label: "Public", detail: "Share on your profile and public feed." },
+    { value: "followers", label: "Followers", detail: "Visible to followers only." },
+    { value: "private", label: "Private", detail: "Only visible to you." },
+  ];
+
+  return (
+    <div className="kb-flow-visibility" aria-label="Visibility">
+      {options.map((option) => (
+        <button
+          type="button"
+          key={option.value}
+          className={value === option.value ? "active" : ""}
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          <strong>{option.label}</strong>
+          <span>{option.detail}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function GlazeRecipeAddFlow({
+  flow,
+  viewer,
+  glazes,
+  onBack,
+  onSave,
+}: {
+  flow: ActiveAddFlow;
+  viewer: Profile;
+  glazes: GlazeProfile[];
+  onBack: () => void;
+  onSave: (payload: GlazeRecipePayload) => void;
+}) {
+  const [title, setTitle] = useState("Untitled glaze recipe");
+  const [coneRange, setConeRange] = useState(glazes[0]?.coneRange ?? "Cone 6");
+  const [baseMaterial, setBaseMaterial] = useState("Custer Feldspar");
+  const [accentMaterial, setAccentMaterial] = useState("Red iron oxide");
+  const [notes, setNotes] = useState("");
+  const [visibility, setVisibility] = useState<AddVisibility>(flow.visibility);
+  const canSave = title.trim().length >= 3;
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+    onSave({
+      title: title.trim(),
+      coneRange,
+      baseMaterial: baseMaterial.trim() || "base material",
+      accentMaterial: accentMaterial.trim() || "accent material",
+      visibility,
+    });
+  };
+
+  return (
+    <div className="kb-add-flow">
+      <AddFlowHero
+        icon={Layers3}
+        kicker="Glaze recipe"
+        title="Write the recipe once, then decide how much to share."
+        body={`Saving to @${viewer.username}. Recipes default to public sharing, with private still available for experiments.`}
+        onBack={onBack}
+      />
+      <div className="kb-flow-layout">
+        <form className="kb-panel kb-flow-card kb-form" onSubmit={submit}>
+          <label>
+            <span>Recipe name</span>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <div className="kb-form-grid">
+            <label>
+              <span>Cone range</span>
+              <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} />
+            </label>
+            <label>
+              <span>Base material</span>
+              <input value={baseMaterial} onChange={(event) => setBaseMaterial(event.target.value)} />
+            </label>
+          </div>
+          <label>
+            <span>Colorant or modifier</span>
+            <input value={accentMaterial} onChange={(event) => setAccentMaterial(event.target.value)} />
+          </label>
+          <label>
+            <span>Notes</span>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Specific gravity, sieve, application thickness, or firing notes"
+            />
+          </label>
+          <VisibilitySelector value={visibility} onChange={setVisibility} />
+          <button type="submit" className="kb-primary-button full" disabled={!canSave}>
+            <Save size={17} />
+            <span>Save glaze recipe</span>
+          </button>
+        </form>
+        <aside className="kb-panel kb-flow-sidebar">
+          <p className="kb-kicker">Preview</p>
+          <h3>{title || "Untitled glaze recipe"}</h3>
+          <div className="kb-hero-swatch" style={{ background: glazes[0]?.heroImageColor ?? BRAND_COLORS.sun }} />
+          <div className="kb-chip-row">
+            <span className="kb-chip">{coneRange}</span>
+            <span className="kb-chip">{visibility}</span>
+          </div>
+          <div className="kb-spec-list">
+            <span>Base <strong>{baseMaterial || "Not set"}</strong></span>
+            <span>Accent <strong>{accentMaterial || "Not set"}</strong></span>
+            <span>Notes <strong>{notes.trim() ? "Added" : "Optional"}</strong></span>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function LiveFiringAddFlow({
+  flow,
+  viewer,
+  firing,
+  ratePoints,
+  estimate,
+  onBack,
+  onQuickReading,
+  onFinishLiveFiring,
+}: {
+  flow: ActiveAddFlow;
+  viewer: Profile;
+  firing?: FiringRecord;
+  ratePoints: ReturnType<typeof calculateRateOfChange>;
+  estimate: ReturnType<typeof estimateFiringDuration>;
+  onBack: () => void;
+  onQuickReading: () => void;
+  onFinishLiveFiring: (firingId: string) => void;
+}) {
+  const latest = ratePoints.at(-1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+  const [photoName, setPhotoName] = useState("");
+  const [atmosphere, setAtmosphere] = useState(firing?.atmosphere ?? "oxidation");
+
+  const saveNote = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!noteDraft.trim()) return;
+    setSavedNote(noteDraft.trim());
+    setNoteDraft("");
+  };
+
+  if (!firing) {
+    return (
+      <div className="kb-add-flow">
+        <AddFlowHero
+          icon={Flame}
+          kicker="Live firing"
+          title="Start live tracking"
+          body="The active firing could not be found. Go back and start a new live firing."
+          onBack={onBack}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="kb-add-flow">
+      <AddFlowHero
+        icon={Flame}
+        kicker="Live firing"
+        title="Live tracker is running"
+        body={`Started for ${viewer.displayName}. Add readings as the kiln changes; this is a record, not a kiln controller.`}
+        onBack={onBack}
+      />
+      <section className="kb-panel kb-live-start">
+        <div className="kb-live-start-main">
+          <span className="kb-add-kind">Active now</span>
+          <h2>{latest ? formatTemperature(latest.actualTemperatureC, "c") : "24C"}</h2>
+          <p>
+            {firing.title} · Target {formatTemperature(firing.targetTemperatureC, "c")} · Cone {firing.targetCone}
+          </p>
+          <div className="kb-chip-row">
+            <VisibilityPill visibility={firing.visibility} />
+            <span className="kb-chip">{firing.kilnNameSnapshot}</span>
+            <span className="kb-chip">{atmosphere.replaceAll("_", " ")}</span>
+          </div>
+        </div>
+        <button type="button" className="kb-flow-primary-action" onClick={onQuickReading}>
+          <Thermometer size={24} />
+          <span>Add temperature reading</span>
+        </button>
+      </section>
+      <div className="kb-flow-layout">
+        <form className="kb-panel kb-flow-card kb-form" onSubmit={saveNote}>
+          <label>
+            <span>Firing note</span>
+            <textarea
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder="Damper change, cone movement, reduction note, odor, sound, or visual observation"
+            />
+          </label>
+          <div className="kb-flow-action-row">
+            <button type="submit" className="kb-quiet-button" disabled={!noteDraft.trim()}>
+              <Save size={17} />
+              <span>Save note</span>
+            </button>
+            <button
+              type="button"
+              className="kb-quiet-button"
+              onClick={() =>
+                setAtmosphere((current) =>
+                  current === "oxidation" ? "reduction" : current === "reduction" ? "neutral" : "oxidation",
+                )
+              }
+            >
+              <Wind size={17} />
+              <span>{atmosphere.replaceAll("_", " ")}</span>
+            </button>
+            <button type="button" className="kb-quiet-button" onClick={() => fileInputRef.current?.click()}>
+              <Camera size={17} />
+              <span>Photo</span>
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            accept="image/*"
+            aria-label="Add live firing photo"
+            onChange={(event) => setPhotoName(event.target.files?.[0]?.name ?? "")}
+          />
+          {(savedNote || photoName) && (
+            <div className="kb-muted-note">
+              {savedNote && <span>Latest note: {savedNote}</span>}
+              {photoName && <span>Queued photo: {photoName}</span>}
+            </div>
+          )}
+          <button type="button" className="kb-primary-button full" onClick={() => onFinishLiveFiring(firing.id)}>
+            <Square size={15} />
+            <span>End and save firing</span>
+          </button>
+        </form>
+        <aside className="kb-panel kb-flow-sidebar">
+          <p className="kb-kicker">Tracking cadence</p>
+          <div className="kb-spec-list">
+            <span>Logging interval <strong>{estimate.recommendedLoggingIntervalMinutes} min</strong></span>
+            <span>Projected total <strong>{estimate.totalHoursRange[0]}-{estimate.totalHoursRange[1]} h</strong></span>
+            <span>Readings <strong>{ratePoints.length}</strong></span>
+            <span>
+              Started{" "}
+              <strong>{new Date(flow.startedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>
+            </span>
+          </div>
+          <p className="kb-safety-note">
+            Manual readings are historical notes. Follow the kiln manufacturer, ventilation, and studio safety procedure while firing.
+          </p>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function PreviousFiringAddFlow({
+  flow,
+  kilns,
+  glazes,
+  clayBodies,
+  onBack,
+  onSave,
+}: {
+  flow: ActiveAddFlow;
+  viewer: Profile;
+  kilns: KilnProfile[];
+  glazes: GlazeProfile[];
+  clayBodies: ClayBodyProfile[];
+  onBack: () => void;
+  onSave: (payload: PreviousFiringPayload) => void;
+}) {
+  const [title, setTitle] = useState("Backfilled cone 6 firing");
+  const [kilnId, setKilnId] = useState(kilns[0]?.id ?? "");
+  const [glazeId, setGlazeId] = useState(glazes[0]?.id ?? "");
+  const [clayBodyId, setClayBodyId] = useState(clayBodies[0]?.id ?? "");
+  const [targetTemperatureC, setTargetTemperatureC] = useState("1222");
+  const [targetCone, setTargetCone] = useState("6");
+  const [actualStartAt, setActualStartAt] = useState(flow.startedAt.slice(0, 16));
+  const [notes, setNotes] = useState("Liked the glaze response; adding the older firing for comparison.");
+  const [visibility, setVisibility] = useState<AddVisibility>(flow.visibility);
+  const canSave = title.trim().length >= 3 && kilnId && glazeId && clayBodyId;
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+    onSave({
+      title: title.trim(),
+      kilnId,
+      glazeId,
+      clayBodyId,
+      targetTemperatureC: Number(targetTemperatureC),
+      targetCone,
+      actualStartAt: new Date(actualStartAt).toISOString(),
+      visibility,
+      notes,
+    });
+  };
+
+  return (
+    <div className="kb-add-flow">
+      <AddFlowHero
+        icon={CalendarDays}
+        kicker="Previous firing"
+        title="Backfill the firing details you remember."
+        body="Connect the old firing to the glaze or clay result that made it worth saving."
+        onBack={onBack}
+      />
+      <form className="kb-panel kb-flow-card kb-form" onSubmit={submit}>
+        <label>
+          <span>Firing name</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <div className="kb-form-grid">
+          <label>
+            <span>Date and time</span>
+            <input type="datetime-local" value={actualStartAt} onChange={(event) => setActualStartAt(event.target.value)} />
+          </label>
+          <label>
+            <span>Kiln</span>
+            <span className="kb-select-wrap">
+              <select value={kilnId} onChange={(event) => setKilnId(event.target.value)}>
+                {kilns.map((kiln) => (
+                  <option key={kiln.id} value={kiln.id}>{kiln.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+        </div>
+        <div className="kb-form-grid">
+          <label>
+            <span>Glaze</span>
+            <span className="kb-select-wrap">
+              <select value={glazeId} onChange={(event) => setGlazeId(event.target.value)}>
+                {glazes.map((glaze) => (
+                  <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+          <label>
+            <span>Clay body</span>
+            <span className="kb-select-wrap">
+              <select value={clayBodyId} onChange={(event) => setClayBodyId(event.target.value)}>
+                {clayBodies.map((clay) => (
+                  <option key={clay.id} value={clay.id}>{clay.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+        </div>
+        <div className="kb-form-grid">
+          <label>
+            <span>Target C</span>
+            <input type="number" value={targetTemperatureC} onChange={(event) => setTargetTemperatureC(event.target.value)} />
+          </label>
+          <label>
+            <span>Cone</span>
+            <input value={targetCone} onChange={(event) => setTargetCone(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          <span>What mattered</span>
+          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </label>
+        <VisibilitySelector value={visibility} onChange={setVisibility} />
+        <button type="submit" className="kb-primary-button full" disabled={!canSave}>
+          <Save size={17} />
+          <span>Save previous firing</span>
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function GlazeResultAddFlow({
+  flow,
+  firings,
+  glazes,
+  clayBodies,
+  onBack,
+  onSave,
+}: {
+  flow: ActiveAddFlow;
+  viewer: Profile;
+  firings: FiringRecord[];
+  glazes: GlazeProfile[];
+  clayBodies: ClayBodyProfile[];
+  onBack: () => void;
+  onSave: (payload: GlazeResultPayload) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState("Glaze result");
+  const [firingId, setFiringId] = useState(firings[0]?.id ?? "");
+  const [glazeId, setGlazeId] = useState(glazes[0]?.id ?? "");
+  const [clayBodyId, setClayBodyId] = useState(clayBodies[0]?.id ?? "");
+  const [rating, setRating] = useState(86);
+  const [imageName, setImageName] = useState("");
+  const [visibility, setVisibility] = useState<AddVisibility>(flow.visibility);
+  const canSave = title.trim().length >= 3 && firingId && glazeId && clayBodyId;
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSave) return;
+    onSave({
+      title: title.trim(),
+      firingId,
+      glazeId,
+      clayBodyId,
+      rating,
+      visibility,
+      imageName,
+    });
+  };
+
+  return (
+    <div className="kb-add-flow">
+      <AddFlowHero
+        icon={Camera}
+        kicker="Glaze result"
+        title="Add the image, then tag the process behind it."
+        body="Each result can connect to a firing, one glaze, one clay body, and profile visibility."
+        onBack={onBack}
+      />
+      <div className="kb-flow-layout">
+        <form className="kb-panel kb-flow-card kb-form" onSubmit={submit}>
+          <button type="button" className="kb-flow-upload" onClick={() => fileInputRef.current?.click()}>
+            <Upload size={24} />
+            <span>{imageName || "Choose result image"}</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            accept="image/*"
+            aria-label="Choose glaze result image"
+            onChange={(event) => setImageName(event.target.files?.[0]?.name ?? "")}
+          />
+          <label>
+            <span>Result title</span>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <div className="kb-form-grid">
+            <label>
+              <span>Firing</span>
+              <span className="kb-select-wrap">
+                <select value={firingId} onChange={(event) => setFiringId(event.target.value)}>
+                  {firings.map((firing) => (
+                    <option key={firing.id} value={firing.id}>{firing.readableNumber} · {firing.title}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+            <label>
+              <span>Glaze</span>
+              <span className="kb-select-wrap">
+                <select value={glazeId} onChange={(event) => setGlazeId(event.target.value)}>
+                  {glazes.map((glaze) => (
+                    <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          </div>
+          <label>
+            <span>Clay body</span>
+            <span className="kb-select-wrap">
+              <select value={clayBodyId} onChange={(event) => setClayBodyId(event.target.value)}>
+                {clayBodies.map((clay) => (
+                  <option key={clay.id} value={clay.id}>{clay.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </label>
+          <label>
+            <span>Result score: {rating}</span>
+            <input type="range" min="1" max="100" value={rating} onChange={(event) => setRating(Number(event.target.value))} />
+          </label>
+          <VisibilitySelector value={visibility} onChange={setVisibility} />
+          <button type="submit" className="kb-primary-button full" disabled={!canSave}>
+            <Save size={17} />
+            <span>Save glaze result</span>
+          </button>
+        </form>
+        <aside className="kb-panel kb-flow-sidebar">
+          <p className="kb-kicker">Image tags</p>
+          <h3>{title}</h3>
+          <div className="kb-ceramic-photo pale" />
+          <div className="kb-chip-row">
+            <span className="kb-chip image">{glazes.find((glaze) => glaze.id === glazeId)?.name ?? "Glaze"}</span>
+            <span className="kb-chip clay">{clayBodies.find((clay) => clay.id === clayBodyId)?.name ?? "Clay body"}</span>
+            <span className="kb-chip record">{firings.find((firing) => firing.id === firingId)?.readableNumber ?? "Firing"}</span>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -1682,7 +2481,7 @@ function LiveFiringPanel({
       </div>
       <input
         ref={fileInputRef}
-        className="sr-only"
+        hidden
         type="file"
         accept="image/*"
         aria-label="Add firing photo"
@@ -1824,7 +2623,7 @@ function ResultPanel({
         </button>
         <input
           ref={uploadInputRef}
-          className="sr-only"
+          hidden
           type="file"
           accept="image/*"
           aria-label="Add result image"
