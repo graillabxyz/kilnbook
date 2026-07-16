@@ -20,6 +20,7 @@ import type {
   Post,
   Profile,
   ProfileType,
+  RecipeIngredient,
   UserPlan,
   Visibility,
   WindSpeedUnit,
@@ -175,6 +176,36 @@ function mapGlaze(row: Row): GlazeProfile {
       BRAND_COLORS.stone,
     ]),
     currentRecipeVersionId: "",
+  };
+}
+
+function mapRecipeIngredient(row: Row): RecipeIngredient {
+  return {
+    materialId: optionalText(row.material_id) ?? text(row.material_name_snapshot),
+    materialName: text(row.material_name_snapshot, "Material"),
+    percentage: numberValue(row.percentage),
+    weightGrams: numberValue(row.weight_grams),
+    role: text(row.ingredient_role, "base") as RecipeIngredient["role"],
+  };
+}
+
+function mapGlazeRecipeVersion(
+  row: Row,
+  ingredients: RecipeIngredient[],
+): GlazeRecipeVersion {
+  return {
+    id: text(row.id),
+    glazeId: text(row.glaze_id),
+    versionNumber: numberValue(row.version_number, 1),
+    effectiveDate: text(row.effective_date, new Date().toISOString().slice(0, 10)),
+    batchSizeGrams: numberValue(row.batch_size_grams, 1000),
+    totalDryWeightGrams: numberValue(row.total_dry_weight_grams, 1000),
+    waterAmountGrams: row.water_amount_grams == null ? undefined : numberValue(row.water_amount_grams),
+    ingredients,
+    sourceAttribution: text(row.source_attribution, "Live database"),
+    changeSummary: text(row.change_summary, "Recipe version"),
+    privateNotes: optionalText(row.notes),
+    visibility: visibilityValue(row.visibility),
   };
 }
 
@@ -337,6 +368,19 @@ function countByPost(rows: Row[] | null) {
   return counts;
 }
 
+function groupRecipeIngredients(rows: Row[] | null) {
+  const grouped = new Map<string, RecipeIngredient[]>();
+  for (const row of rows ?? []) {
+    const recipeVersionId = text(row.recipe_version_id);
+    if (!recipeVersionId) continue;
+    grouped.set(recipeVersionId, [
+      ...(grouped.get(recipeVersionId) ?? []),
+      mapRecipeIngredient(row),
+    ]);
+  }
+  return grouped;
+}
+
 async function readTable<T>(promise: PromiseLike<{ data: T[] | null; error: unknown }>) {
   const { data, error } = await promise;
   if (error) throw error;
@@ -366,6 +410,8 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
         kilnRows,
         clayRows,
         glazeRows,
+        recipeRows,
+        recipeIngredientRows,
         firingRows,
         imageRows,
         postRows,
@@ -381,6 +427,8 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
         readTable<Row>(supabase.from("kilns").select("*").eq("visibility", "public").order("created_at")),
         readTable<Row>(supabase.from("clay_bodies").select("*").eq("profile_visibility", "public").order("created_at")),
         readTable<Row>(supabase.from("glazes").select("*").eq("profile_visibility", "public").order("created_at")),
+        readTable<Row>(supabase.from("glaze_recipe_versions").select("*").order("created_at")),
+        readTable<Row>(supabase.from("glaze_recipe_ingredients").select("*").order("display_order")),
         readTable<Row>(supabase.from("firings").select("*").eq("visibility", "public").order("created_at", { ascending: false })),
         readTable<Row>(supabase.from("images").select("*").eq("visibility", "public").order("created_at", { ascending: false })),
         readTable<Row>(supabase.from("posts").select("*").eq("visibility", "public").order("created_at", { ascending: false }).limit(50)),
@@ -401,6 +449,27 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
       const linkedImageIds = groupIds(postImageRows, "image_id");
       const commentsByPost = countByPost(commentRows);
       const likesByPost = countByPost(likeRows);
+      const ingredientsByVersion = groupRecipeIngredients(recipeIngredientRows);
+      const glazeRecipeVersions = recipeRows.map((recipe) =>
+        mapGlazeRecipeVersion(recipe, ingredientsByVersion.get(text(recipe.id)) ?? []),
+      );
+      const latestRecipeIdByGlaze = new Map<string, string>();
+      for (const recipe of glazeRecipeVersions) {
+        const current = latestRecipeIdByGlaze.get(recipe.glazeId);
+        const currentVersion = current
+          ? glazeRecipeVersions.find((item) => item.id === current)?.versionNumber ?? 0
+          : 0;
+        if (recipe.versionNumber >= currentVersion) {
+          latestRecipeIdByGlaze.set(recipe.glazeId, recipe.id);
+        }
+      }
+      const glazes = glazeRows.map((glaze) => {
+        const mapped = mapGlaze(glaze);
+        return {
+          ...mapped,
+          currentRecipeVersionId: latestRecipeIdByGlaze.get(mapped.id) ?? mapped.currentRecipeVersionId,
+        };
+      });
       const posts = postRows.map((post) =>
         mapPost(
           post,
@@ -419,8 +488,8 @@ export class SupabaseKilnbookRepository implements KilnbookRepository {
         profiles,
         kilns: kilnRows.map(mapKiln),
         clayBodies: clayRows.map(mapClayBody),
-        glazes: glazeRows.map(mapGlaze),
-        glazeRecipeVersions: [],
+        glazes,
+        glazeRecipeVersions,
         firings: firingRows.map(mapFiring),
         firingSegments: [],
         firingLogPoints: [],

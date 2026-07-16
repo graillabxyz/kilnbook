@@ -140,6 +140,9 @@ test("glaze, clay body, and kiln libraries use real creation flows", async () =>
   assert.match(workspace, /function GlazeCreateDialog/);
   assert.match(workspace, /function ClayBodyCreateDialog/);
   assert.match(workspace, /function KilnCreateDialog/);
+  assert.match(workspace, /persistGlazeRecord/);
+  assert.match(workspace, /persistClayBodyProfile/);
+  assert.match(workspace, /persistKilnProfile/);
   assert.match(workspace, /Add commercial glaze/);
   assert.match(workspace, /Save clay body/);
   assert.match(workspace, /Save kiln/);

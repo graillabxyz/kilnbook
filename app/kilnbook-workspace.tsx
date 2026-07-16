@@ -488,6 +488,10 @@ function parseRequiredNumber(value: string, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function createClientRecordId(prefix: string) {
+  return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}`;
+}
+
 function colorFamiliesFromText(value: string) {
   return value
     .split(",")
@@ -500,6 +504,141 @@ function atmosphereValuesFromForm(form: HTMLFormElement) {
   return values.filter((value): value is AtmosphereType =>
     ATMOSPHERE_OPTIONS.some((option) => option.value === value),
   );
+}
+
+function recipeFingerprint(ingredients: RecipeIngredient[]) {
+  if (ingredients.length === 0) return `commercial-${Date.now()}`;
+  return ingredients
+    .map((ingredient) =>
+      [
+        ingredient.role,
+        ingredient.materialName.trim().toLowerCase(),
+        Math.round(ingredient.percentage * 1000) / 1000,
+      ].join(":"),
+    )
+    .join("|");
+}
+
+async function getWritableSupabaseClient() {
+  if (!isSupabaseBrowserConfigured()) return null;
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!data.session?.user) return null;
+  return { supabase, userId: data.session.user.id };
+}
+
+async function persistGlazeRecord(record: CreatedGlazeRecord) {
+  const writable = await getWritableSupabaseClient();
+  if (!writable) return;
+  const { supabase, userId } = writable;
+  const { profile, recipeVersion } = record;
+  const totalPercentage = recipeVersion.ingredients.reduce(
+    (sum, ingredient) => sum + ingredient.percentage,
+    0,
+  );
+  const { error: glazeError } = await supabase.from("glazes").insert({
+    id: profile.id,
+    owner_id: userId,
+    name: profile.name,
+    creator_attribution: profile.creatorAttribution,
+    source: profile.source,
+    glaze_type: profile.glazeType,
+    surface: profile.surface,
+    color_family: profile.colorFamily,
+    opacity: profile.opacity,
+    firing_range: profile.firingRange,
+    cone_range: profile.coneRange,
+    atmosphere_compatibility: profile.atmosphereCompatibility,
+    recipe_visibility: profile.recipeVisibility,
+    profile_visibility: profile.profileVisibility,
+    description: profile.description,
+    application_notes: profile.applicationNotes,
+  });
+  if (glazeError) throw glazeError;
+
+  const { error: recipeError } = await supabase.from("glaze_recipe_versions").insert({
+    id: recipeVersion.id,
+    glaze_id: profile.id,
+    version_number: recipeVersion.versionNumber,
+    effective_date: recipeVersion.effectiveDate,
+    batch_size_grams: recipeVersion.batchSizeGrams,
+    total_dry_weight_grams: recipeVersion.totalDryWeightGrams,
+    water_amount_grams: recipeVersion.waterAmountGrams,
+    source_attribution: recipeVersion.sourceAttribution,
+    change_summary: recipeVersion.changeSummary,
+    calculated_total_percentage: totalPercentage,
+    recipe_fingerprint: recipeFingerprint(recipeVersion.ingredients),
+    visibility: recipeVersion.visibility,
+    notes: recipeVersion.privateNotes ?? "",
+  });
+  if (recipeError) throw recipeError;
+
+  if (recipeVersion.ingredients.length === 0) return;
+  const { error: ingredientError } = await supabase.from("glaze_recipe_ingredients").insert(
+    recipeVersion.ingredients.map((ingredient, index) => ({
+      recipe_version_id: recipeVersion.id,
+      material_id: ingredient.materialId.startsWith("material-") ? null : ingredient.materialId,
+      material_name_snapshot: ingredient.materialName,
+      ingredient_role: ingredient.role,
+      percentage: ingredient.percentage,
+      weight_grams: ingredient.weightGrams,
+      display_order: index + 1,
+    })),
+  );
+  if (ingredientError) throw ingredientError;
+}
+
+async function persistClayBodyProfile(profile: ClayBodyProfile) {
+  const writable = await getWritableSupabaseClient();
+  if (!writable) return;
+  const { supabase, userId } = writable;
+  const { error } = await supabase.from("clay_bodies").insert({
+    id: profile.id,
+    owner_id: userId,
+    name: profile.name,
+    manufacturer: profile.manufacturer,
+    supplier: profile.supplier,
+    body_type: profile.bodyType,
+    raw_color: profile.rawColor,
+    fired_color: profile.firedColor,
+    texture: profile.texture,
+    grog_percentage: profile.grogPercentage,
+    absorption_percentage: profile.absorptionPercentage,
+    shrinkage_percentage: profile.shrinkagePercentage,
+    cone_range: profile.coneRange,
+    maturation_range: profile.coneRange,
+    atmosphere_suitability: profile.atmosphereSuitability,
+    recipe_visibility: profile.recipeVisibility,
+    profile_visibility: profile.profileVisibility,
+    notes: profile.notes,
+  });
+  if (error) throw error;
+}
+
+async function persistKilnProfile(profile: KilnProfile) {
+  const writable = await getWritableSupabaseClient();
+  if (!writable) return;
+  const { supabase, userId } = writable;
+  const { error } = await supabase.from("kilns").insert({
+    id: profile.id,
+    owner_id: userId,
+    name: profile.name,
+    manufacturer: profile.manufacturer,
+    model: profile.model,
+    kiln_type: profile.kilnType,
+    fuel_type: profile.fuelType,
+    controller_type: profile.controllerType,
+    usable_volume_liters: profile.usableVolumeLiters,
+    maximum_temperature_c: profile.maxTemperatureC,
+    recommended_cone_range: profile.recommendedConeRange,
+    default_location: profile.defaultLocation,
+    power_kw: profile.powerKw,
+    active: profile.active,
+    visibility: profile.visibility,
+    notes: profile.notes,
+  });
+  if (error) throw error;
 }
 
 function windDirectionFromDegrees(value: number | undefined) {
@@ -908,9 +1047,10 @@ export function KilnbookWorkspace({
 
   const createInlineGlazeProfile = () => {
     const createdAt = Date.now();
-    const recipeId = `recipe-inline-${createdAt}`;
+    const profileId = createClientRecordId("glaze");
+    const recipeId = createClientRecordId("recipe");
     const profile: GlazeProfile = {
-      id: `glaze-inline-${createdAt}`,
+      id: profileId,
       ownerId: viewer.id,
       name: `Draft glaze profile ${glazes.length + 1}`,
       creatorAttribution: viewer.displayName,
@@ -947,9 +1087,8 @@ export function KilnbookWorkspace({
   };
 
   const createInlineClayBodyProfile = () => {
-    const createdAt = Date.now();
     const profile: ClayBodyProfile = {
-      id: `clay-inline-${createdAt}`,
+      id: createClientRecordId("clay"),
       ownerId: viewer.id,
       name: `Draft clay body profile ${clayBodies.length + 1}`,
       manufacturer: "Studio mixed",
@@ -972,9 +1111,8 @@ export function KilnbookWorkspace({
   };
 
   const createInlineKilnProfile = () => {
-    const createdAt = Date.now();
     const profile: KilnProfile = {
-      id: `kiln-inline-${createdAt}`,
+      id: createClientRecordId("kiln"),
       ownerId: viewer.id,
       name: `Draft kiln profile ${kilns.length + 1}`,
       manufacturer: "Unknown",
@@ -1112,8 +1250,8 @@ export function KilnbookWorkspace({
 
   const handleSaveGlazeRecipe = (payload: GlazeRecipePayload) => {
     const createdAt = Date.now();
-    const profileId = `glaze-add-flow-${createdAt}`;
-    const recipeId = `recipe-add-flow-${createdAt}`;
+    const profileId = createClientRecordId("glaze");
+    const recipeId = createClientRecordId("recipe");
     const ingredients: RecipeIngredient[] = [
       {
         materialId: `material-${createdAt}-base`,
@@ -1164,6 +1302,9 @@ export function KilnbookWorkspace({
     };
     setGlazes((items) => [profile, ...items]);
     setGlazeRecipeVersions((items) => [recipeVersion, ...items]);
+    void persistGlazeRecord({ profile, recipeVersion }).catch((error: unknown) => {
+      console.error("Unable to persist glaze recipe", error);
+    });
     recordAddDraft(
       "glaze_recipe",
       payload.visibility,
@@ -1176,6 +1317,9 @@ export function KilnbookWorkspace({
   const handleCreateGlazeRecord = (record: CreatedGlazeRecord) => {
     setGlazes((items) => [record.profile, ...items]);
     setGlazeRecipeVersions((items) => [record.recipeVersion, ...items]);
+    void persistGlazeRecord(record).catch((error: unknown) => {
+      console.error("Unable to persist glaze profile", error);
+    });
     recordAddDraft(
       "glaze_recipe",
       record.profile.recipeVisibility === "studio" ? "followers" : record.profile.recipeVisibility,
@@ -1188,10 +1332,16 @@ export function KilnbookWorkspace({
 
   const handleCreateClayBodyProfile = (profile: ClayBodyProfile) => {
     setClayBodies((items) => [profile, ...items]);
+    void persistClayBodyProfile(profile).catch((error: unknown) => {
+      console.error("Unable to persist clay body profile", error);
+    });
   };
 
   const handleCreateKilnProfile = (profile: KilnProfile) => {
     setKilns((items) => [profile, ...items]);
+    void persistKilnProfile(profile).catch((error: unknown) => {
+      console.error("Unable to persist kiln profile", error);
+    });
   };
 
   const handleSavePreviousFiring = (payload: PreviousFiringPayload) => {
@@ -4510,8 +4660,8 @@ function GlazeCreateDialog({
     if (!canSave) return;
 
     const createdAt = Date.now();
-    const profileId = `glaze-${createdAt}`;
-    const recipeId = `recipe-${createdAt}`;
+    const profileId = createClientRecordId("glaze");
+    const recipeId = createClientRecordId("recipe");
     const atmospheres = atmosphereValuesFromForm(event.currentTarget);
     const recipeIngredients: RecipeIngredient[] =
       mode === "recipe"
@@ -4852,7 +5002,7 @@ function ClayBodyCreateDialog({
     if (!canSave) return;
     const atmospheres = atmosphereValuesFromForm(event.currentTarget);
     onCreate({
-      id: `clay-${Date.now()}`,
+      id: createClientRecordId("clay"),
       ownerId: viewer.id,
       name: name.trim(),
       manufacturer: manufacturer.trim() || (mode === "commercial" ? "Commercial supplier" : "Studio mixed"),
@@ -5081,7 +5231,7 @@ function KilnCreateDialog({
     event.preventDefault();
     if (!canSave) return;
     onCreate({
-      id: `kiln-${Date.now()}`,
+      id: createClientRecordId("kiln"),
       ownerId: viewer.id,
       name: name.trim(),
       manufacturer: manufacturer.trim() || "Unknown",
