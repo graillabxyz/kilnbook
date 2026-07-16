@@ -273,6 +273,9 @@ export function KilnbookWorkspace({
   });
   const [feedTab, setFeedTab] = useState<"Following" | "Popular">("Following");
   const [firings, setFirings] = useState<FiringRecord[]>(snapshot.firings);
+  const [glazes, setGlazes] = useState<GlazeProfile[]>(snapshot.glazes);
+  const [clayBodies, setClayBodies] = useState<ClayBodyProfile[]>(snapshot.clayBodies);
+  const [kilns, setKilns] = useState<KilnProfile[]>(snapshot.kilns);
   const [environmentRecords, setEnvironmentRecords] = useState<FiringEnvironmentRecord[]>(
     snapshot.firingEnvironmentRecords,
   );
@@ -283,8 +286,8 @@ export function KilnbookWorkspace({
   const [addChooserOpen, setAddChooserOpen] = useState(false);
   const [addDrafts, setAddDrafts] = useState<AddDraft[]>([]);
   const [activeAddFlow, setActiveAddFlow] = useState<ActiveAddFlow | null>(null);
-  const kilnById = useMemo(() => createRecordMap(snapshot.kilns), [snapshot.kilns]);
-  const glazeById = useMemo(() => createRecordMap(snapshot.glazes), [snapshot.glazes]);
+  const kilnById = useMemo(() => createRecordMap(kilns), [kilns]);
+  const glazeById = useMemo(() => createRecordMap(glazes), [glazes]);
   const firingById = useMemo(() => createRecordMap(firings), [firings]);
   const environmentByFiringId = useMemo(
     () => new Map(environmentRecords.map((record) => [record.firingId, record])),
@@ -597,13 +600,87 @@ export function KilnbookWorkspace({
     ]);
   };
 
+  const createInlineGlazeProfile = () => {
+    const createdAt = Date.now();
+    const profile: GlazeProfile = {
+      id: `glaze-inline-${createdAt}`,
+      ownerId: viewer.id,
+      name: `Untitled glaze ${glazes.length + 1}`,
+      creatorAttribution: viewer.displayName,
+      source: "Created from post composer",
+      glazeType: "studio_test",
+      surface: "Surface pending",
+      colorFamily: ["Unsorted"],
+      opacity: "unknown",
+      firingRange: "Cone 6-10",
+      coneRange: "6-10",
+      atmosphereCompatibility: ["oxidation", "reduction"],
+      recipeVisibility: "public",
+      profileVisibility: "public",
+      description: "Draft glaze profile. Add recipe details, surface notes, and fired images.",
+      applicationNotes: "Application notes pending.",
+      heroImageColor: BRAND_COLORS.sun,
+      currentRecipeVersionId: `recipe-inline-${createdAt}`,
+    };
+    setGlazes((items) => [profile, ...items]);
+    return profile;
+  };
+
+  const createInlineClayBodyProfile = () => {
+    const createdAt = Date.now();
+    const profile: ClayBodyProfile = {
+      id: `clay-inline-${createdAt}`,
+      ownerId: viewer.id,
+      name: `Untitled clay body ${clayBodies.length + 1}`,
+      manufacturer: "Studio mixed",
+      supplier: "Studio",
+      bodyType: "stoneware",
+      rawColor: "unknown",
+      firedColor: "pending",
+      texture: "unspecified",
+      absorptionPercentage: 0,
+      shrinkagePercentage: 0,
+      coneRange: "6-10",
+      atmosphereSuitability: ["oxidation", "reduction"],
+      recipeVisibility: "public",
+      profileVisibility: "public",
+      notes: "Draft clay body profile. Add fit, shrinkage, absorption, and fired color notes.",
+      imageColor: BRAND_COLORS.stone,
+    };
+    setClayBodies((items) => [profile, ...items]);
+    return profile;
+  };
+
+  const createInlineKilnProfile = () => {
+    const createdAt = Date.now();
+    const profile: KilnProfile = {
+      id: `kiln-inline-${createdAt}`,
+      ownerId: viewer.id,
+      name: `Untitled kiln ${kilns.length + 1}`,
+      manufacturer: "Unknown",
+      model: "Draft",
+      kilnType: "electric",
+      fuelType: "electric",
+      controllerType: "unspecified",
+      usableVolumeLiters: 0,
+      maxTemperatureC: 1300,
+      recommendedConeRange: "04-10",
+      defaultLocation: "indoors",
+      active: true,
+      visibility: "public",
+      notes: "Draft kiln profile. Add dimensions, controller, location, and maintenance details.",
+    };
+    setKilns((items) => [profile, ...items]);
+    return profile;
+  };
+
   const createAddFiring = (
     kind: Extract<AddKind, "live_firing" | "previous_firing">,
     visibility: AddVisibility,
     createdAt: string,
     payload?: Partial<PreviousFiringPayload>,
   ) => {
-    const kiln = (payload?.kilnId ? kilnById.get(payload.kilnId) : undefined) ?? snapshot.kilns[0];
+    const kiln = (payload?.kilnId ? kilnById.get(payload.kilnId) : undefined) ?? kilns[0];
     const newFiring: FiringRecord = {
       id: `firing-add-${Date.now()}`,
       ownerId: viewer.id,
@@ -828,9 +905,9 @@ export function KilnbookWorkspace({
               firings={firings}
               activeFiring={activeFiring}
               activeEnvironment={activeEnvironment}
-              kilns={snapshot.kilns}
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
+              kilns={kilns}
+              glazes={glazes}
+              clayBodies={clayBodies}
               ratePoints={ratePoints}
               estimate={estimate}
               onBack={() => setActiveAddFlow(null)}
@@ -847,9 +924,13 @@ export function KilnbookWorkspace({
               onFeedTabChange={setFeedTab}
               posts={feedTab === "Following" ? snapshot.posts : popularPosts}
               firings={firings}
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
+              glazes={glazes}
+              clayBodies={clayBodies}
+              kilns={kilns}
               onOpenExplore={() => navigateToView("Explore")}
+              onCreateGlazeProfile={createInlineGlazeProfile}
+              onCreateClayBodyProfile={createInlineClayBodyProfile}
+              onCreateKilnProfile={createInlineKilnProfile}
               viewer={viewer}
               authStatus={authStatus}
               onGoogleSignIn={handleGoogleSignIn}
@@ -859,8 +940,8 @@ export function KilnbookWorkspace({
           {!activeAddFlow && view === "Dashboard" && (
             <DashboardScreen
               firings={firings}
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
+              glazes={glazes}
+              clayBodies={clayBodies}
               selectedFiring={selectedFiring}
               ratePoints={ratePoints}
             />
@@ -869,9 +950,9 @@ export function KilnbookWorkspace({
             <FiringsScreen
               firings={firings}
               selectedFiring={selectedFiring}
-              kilns={snapshot.kilns}
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
+              kilns={kilns}
+              glazes={glazes}
+              clayBodies={clayBodies}
               applications={snapshot.glazeApplications}
               ratePoints={ratePoints}
               estimate={estimate}
@@ -887,10 +968,10 @@ export function KilnbookWorkspace({
           )}
           {!activeAddFlow && view === "Glazes" && (
             <GlazesScreen
-              glazes={snapshot.glazes}
+              glazes={glazes}
               recipes={snapshot.glazeRecipeVersions}
               applications={snapshot.glazeApplications}
-              clayBodies={snapshot.clayBodies}
+              clayBodies={clayBodies}
               firings={firings}
               addDrafts={addDrafts.filter((draft) =>
                 draft.kind === "glaze_recipe" || draft.kind === "glaze_result",
@@ -899,21 +980,21 @@ export function KilnbookWorkspace({
           )}
           {!activeAddFlow && view === "Clay Bodies" && (
             <ClayBodiesScreen
-              clayBodies={snapshot.clayBodies}
-              glazes={snapshot.glazes}
+              clayBodies={clayBodies}
+              glazes={glazes}
               applications={snapshot.glazeApplications}
               firings={firings}
             />
           )}
           {!activeAddFlow && view === "Kilns" && (
-            <KilnsScreen kilns={snapshot.kilns} firings={firings} />
+            <KilnsScreen kilns={kilns} firings={firings} />
           )}
           {!activeAddFlow && view === "Explore" && (
             <ExploreScreen
               query={query}
               profiles={snapshot.profiles}
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
+              glazes={glazes}
+              clayBodies={clayBodies}
               posts={snapshot.posts}
               firings={firings}
             />
@@ -925,8 +1006,8 @@ export function KilnbookWorkspace({
             <AnalyticsScreen
               plan={viewer.subscriptionTier}
               firings={firings}
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
+              glazes={glazes}
+              clayBodies={clayBodies}
             />
           )}
           {!activeAddFlow && view === "Profile" && (
@@ -940,9 +1021,9 @@ export function KilnbookWorkspace({
           {!activeAddFlow && view === "Settings" && <SettingsScreen viewer={viewer} />}
           {!activeAddFlow && view === "Library" && (
             <LibraryScreen
-              glazes={snapshot.glazes}
-              clayBodies={snapshot.clayBodies}
-              kilns={snapshot.kilns}
+              glazes={glazes}
+              clayBodies={clayBodies}
+              kilns={kilns}
               onViewChange={setView}
             />
           )}
@@ -2272,7 +2353,11 @@ function HomeScreen({
   firings,
   glazes,
   clayBodies,
+  kilns,
   onOpenExplore,
+  onCreateGlazeProfile,
+  onCreateClayBodyProfile,
+  onCreateKilnProfile,
   viewer,
   authStatus,
   onGoogleSignIn,
@@ -2284,7 +2369,11 @@ function HomeScreen({
   firings: FiringRecord[];
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
+  kilns: KilnProfile[];
   onOpenExplore: () => void;
+  onCreateGlazeProfile: () => GlazeProfile;
+  onCreateClayBodyProfile: () => ClayBodyProfile;
+  onCreateKilnProfile: () => KilnProfile;
   viewer: Profile;
   authStatus: AuthStatus;
   onGoogleSignIn: () => void;
@@ -2317,7 +2406,15 @@ function HomeScreen({
             ))}
           </div>
         </div>
-        <PostComposer glazes={glazes} clayBodies={clayBodies} firings={firings} />
+        <PostComposer
+          glazes={glazes}
+          clayBodies={clayBodies}
+          kilns={kilns}
+          firings={firings}
+          onCreateGlazeProfile={onCreateGlazeProfile}
+          onCreateClayBodyProfile={onCreateClayBodyProfile}
+          onCreateKilnProfile={onCreateKilnProfile}
+        />
         <div className="kb-feed-list">
           {posts.length === 0 ? (
             <EmptyState
@@ -2360,40 +2457,42 @@ type ComposerImageDraft = {
   clayBodyIds: string[];
 };
 
-function compactIds(ids: Array<string | undefined>) {
-  return ids.filter((id): id is string => Boolean(id));
-}
+type PickerOption = {
+  label: string;
+  detail?: string;
+  icon: LucideIcon;
+  onSelect: () => void;
+};
+
+type PickerGroup = {
+  label: string;
+  options: PickerOption[];
+};
 
 function PostComposer({
   glazes,
   clayBodies,
+  kilns,
   firings,
+  onCreateGlazeProfile,
+  onCreateClayBodyProfile,
+  onCreateKilnProfile,
 }: {
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
+  kilns: KilnProfile[];
   firings: FiringRecord[];
+  onCreateGlazeProfile: () => GlazeProfile;
+  onCreateClayBodyProfile: () => ClayBodyProfile;
+  onCreateKilnProfile: () => KilnProfile;
 }) {
   const [postText, setPostText] = useState("");
   const [publishNotice, setPublishNotice] = useState("");
   const [selectedFiringId, setSelectedFiringId] = useState("");
   const [selectedGlazeIds, setSelectedGlazeIds] = useState<string[]>([]);
   const [selectedClayBodyIds, setSelectedClayBodyIds] = useState<string[]>([]);
-  const [composerImages, setComposerImages] = useState<ComposerImageDraft[]>([
-    {
-      id: "composer-image-1",
-      label: "Image 1",
-      tone: "dark",
-      glazeIds: compactIds([glazes[0]?.id]),
-      clayBodyIds: compactIds([clayBodies[0]?.id]),
-    },
-    {
-      id: "composer-image-2",
-      label: "Image 2",
-      tone: "pale",
-      glazeIds: compactIds([glazes[1]?.id ?? glazes[0]?.id]),
-      clayBodyIds: [],
-    },
-  ]);
+  const [selectedKilnIds, setSelectedKilnIds] = useState<string[]>([]);
+  const [composerImages, setComposerImages] = useState<ComposerImageDraft[]>([]);
 
   const selectedFiring = firings.find((firing) => firing.id === selectedFiringId);
   const hasImageTags = composerImages.some(
@@ -2404,6 +2503,7 @@ function PostComposer({
     Boolean(selectedFiringId) ||
     selectedGlazeIds.length > 0 ||
     selectedClayBodyIds.length > 0 ||
+    selectedKilnIds.length > 0 ||
     hasImageTags;
 
   const addUnique = (values: string[], value: string) =>
@@ -2427,6 +2527,31 @@ function PostComposer({
           : image,
       ),
     );
+  };
+
+  const createAndLinkGlaze = () => {
+    const profile = onCreateGlazeProfile();
+    setSelectedGlazeIds((ids) => addUnique(ids, profile.id));
+  };
+
+  const createAndLinkClayBody = () => {
+    const profile = onCreateClayBodyProfile();
+    setSelectedClayBodyIds((ids) => addUnique(ids, profile.id));
+  };
+
+  const createAndLinkKiln = () => {
+    const profile = onCreateKilnProfile();
+    setSelectedKilnIds((ids) => addUnique(ids, profile.id));
+  };
+
+  const createAndTagImageGlaze = (imageId: string) => {
+    const profile = onCreateGlazeProfile();
+    addImageGlaze(imageId, profile.id);
+  };
+
+  const createAndTagImageClayBody = (imageId: string) => {
+    const profile = onCreateClayBodyProfile();
+    addImageClayBody(imageId, profile.id);
   };
 
   const removeImageGlaze = (imageId: string, glazeId: string) => {
@@ -2492,9 +2617,9 @@ function PostComposer({
             </div>
             <VisibilityPill visibility="followers" />
           </div>
-          <div className="kb-compose-controls">
+          <div className="kb-compose-controls compact">
             <label className="kb-select-field">
-              <span>Firing</span>
+              <span>Firing record</span>
               <span className="kb-select-wrap">
                 <select
                   aria-label="Link firing"
@@ -2511,48 +2636,68 @@ function PostComposer({
                 <ChevronDown size={16} aria-hidden="true" />
               </span>
             </label>
-            <label className="kb-select-field">
-              <span>Add glaze</span>
-              <span className="kb-select-wrap">
-                <select
-                  aria-label="Add linked glaze"
-                  defaultValue=""
-                  onChange={(event) => {
-                    setSelectedGlazeIds((ids) => addUnique(ids, event.target.value));
-                    event.currentTarget.value = "";
-                  }}
-                >
-                  <option value="">Choose a glaze</option>
-                  {glazes.map((glaze) => (
-                    <option key={glaze.id} value={glaze.id}>
-                      {glaze.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-            <label className="kb-select-field">
-              <span>Add clay body</span>
-              <span className="kb-select-wrap">
-                <select
-                  aria-label="Add linked clay body"
-                  defaultValue=""
-                  onChange={(event) => {
-                    setSelectedClayBodyIds((ids) => addUnique(ids, event.target.value));
-                    event.currentTarget.value = "";
-                  }}
-                >
-                  <option value="">Choose a clay body</option>
-                  {clayBodies.map((clay) => (
-                    <option key={clay.id} value={clay.id}>
-                      {clay.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
+            <div className="kb-select-field">
+              <span>Profiles</span>
+              <InlinePicker
+                label="Add profile"
+                icon={Plus}
+                groups={[
+                  {
+                    label: "Create profile",
+                    options: [
+                      {
+                        label: "New glaze profile",
+                        detail: "Create and link a draft glaze",
+                        icon: Layers3,
+                        onSelect: createAndLinkGlaze,
+                      },
+                      {
+                        label: "New clay body profile",
+                        detail: "Create and link a draft clay body",
+                        icon: Microscope,
+                        onSelect: createAndLinkClayBody,
+                      },
+                      {
+                        label: "New kiln profile",
+                        detail: "Create and link a draft kiln",
+                        icon: Gauge,
+                        onSelect: createAndLinkKiln,
+                      },
+                    ],
+                  },
+                  {
+                    label: "Glazes",
+                    options: glazes.map((glaze) => ({
+                      label: glaze.name,
+                      detail: glaze.coneRange,
+                      icon: Layers3,
+                      onSelect: () =>
+                        setSelectedGlazeIds((ids) => addUnique(ids, glaze.id)),
+                    })),
+                  },
+                  {
+                    label: "Clay bodies",
+                    options: clayBodies.map((clay) => ({
+                      label: clay.name,
+                      detail: clay.coneRange,
+                      icon: Microscope,
+                      onSelect: () =>
+                        setSelectedClayBodyIds((ids) => addUnique(ids, clay.id)),
+                    })),
+                  },
+                  {
+                    label: "Kilns",
+                    options: kilns.map((kiln) => ({
+                      label: kiln.name,
+                      detail: kiln.recommendedConeRange,
+                      icon: Gauge,
+                      onSelect: () =>
+                        setSelectedKilnIds((ids) => addUnique(ids, kiln.id)),
+                    })),
+                  },
+                ]}
+              />
+            </div>
           </div>
           <div className="kb-selected-summary">
             {selectedFiring && (
@@ -2595,9 +2740,29 @@ function PostComposer({
                 </button>
               );
             })}
-            {!selectedFiring && selectedGlazeIds.length === 0 && selectedClayBodyIds.length === 0 && (
-              <span className="kb-muted-note">No record links selected</span>
-            )}
+            {selectedKilnIds.map((kilnId) => {
+              const kiln = kilns.find((item) => item.id === kilnId);
+              return (
+                <button
+                  type="button"
+                  className="kb-chip removable kiln"
+                  key={kilnId}
+                  onClick={() =>
+                    setSelectedKilnIds((ids) => ids.filter((id) => id !== kilnId))
+                  }
+                >
+                  <Gauge size={14} aria-hidden="true" />
+                  {kiln?.name ?? kilnId}
+                  <CircleX size={14} aria-hidden="true" />
+                </button>
+              );
+            })}
+            {!selectedFiring &&
+              selectedGlazeIds.length === 0 &&
+              selectedClayBodyIds.length === 0 &&
+              selectedKilnIds.length === 0 && (
+                <span className="kb-muted-note">No record links selected</span>
+              )}
           </div>
         </section>
         <section className="kb-compose-module" aria-labelledby="post-image-tags">
@@ -2612,7 +2777,12 @@ function PostComposer({
             </button>
           </div>
           <div className="kb-image-tag-list">
-            {composerImages.map((image) => (
+            {composerImages.length === 0 ? (
+              <div className="kb-empty-inline">
+                <ImageIcon size={18} aria-hidden="true" />
+                <span>Add images when a photo needs its own glaze or clay body tags.</span>
+              </div>
+            ) : composerImages.map((image) => (
               <div className="kb-image-tag-card" key={image.id}>
                 <div className={`kb-ceramic-thumb ${image.tone}`} />
                 <div>
@@ -2667,42 +2837,48 @@ function PostComposer({
                     )}
                   </div>
                   <div className="kb-inline-controls">
-                    <label className="kb-select-wrap compact">
-                      <span className="sr-only">Add image glaze tag</span>
-                      <select
-                        defaultValue=""
-                        onChange={(event) => {
-                          addImageGlaze(image.id, event.target.value);
-                          event.currentTarget.value = "";
-                        }}
-                      >
-                        <option value="">Tag glaze</option>
-                        {glazes.map((glaze) => (
-                          <option key={glaze.id} value={glaze.id}>
-                            {glaze.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} aria-hidden="true" />
-                    </label>
-                    <label className="kb-select-wrap compact">
-                      <span className="sr-only">Add image clay body tag</span>
-                      <select
-                        defaultValue=""
-                        onChange={(event) => {
-                          addImageClayBody(image.id, event.target.value);
-                          event.currentTarget.value = "";
-                        }}
-                      >
-                        <option value="">Tag clay</option>
-                        {clayBodies.map((clay) => (
-                          <option key={clay.id} value={clay.id}>
-                            {clay.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} aria-hidden="true" />
-                    </label>
+                    <InlinePicker
+                      label="Tag glaze or clay"
+                      icon={Plus}
+                      compact
+                      groups={[
+                        {
+                          label: "Create profile",
+                          options: [
+                            {
+                              label: "New glaze profile",
+                              detail: "Create and tag this image",
+                              icon: Layers3,
+                              onSelect: () => createAndTagImageGlaze(image.id),
+                            },
+                            {
+                              label: "New clay body profile",
+                              detail: "Create and tag this image",
+                              icon: Microscope,
+                              onSelect: () => createAndTagImageClayBody(image.id),
+                            },
+                          ],
+                        },
+                        {
+                          label: "Glazes",
+                          options: glazes.map((glaze) => ({
+                            label: glaze.name,
+                            detail: glaze.coneRange,
+                            icon: Layers3,
+                            onSelect: () => addImageGlaze(image.id, glaze.id),
+                          })),
+                        },
+                        {
+                          label: "Clay bodies",
+                          options: clayBodies.map((clay) => ({
+                            label: clay.name,
+                            detail: clay.coneRange,
+                            icon: Microscope,
+                            onSelect: () => addImageClayBody(image.id, clay.id),
+                          })),
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               </div>
@@ -2719,6 +2895,79 @@ function PostComposer({
       </div>
       {publishNotice && <p className="kb-muted-note">{publishNotice}</p>}
     </form>
+  );
+}
+
+function InlinePicker({
+  label,
+  icon: Icon,
+  groups,
+  compact = false,
+}: {
+  label: string;
+  icon: LucideIcon;
+  groups: PickerGroup[];
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const availableGroups = groups
+    .map((group) => ({
+      ...group,
+      options: group.options.filter(Boolean),
+    }))
+    .filter((group) => group.options.length > 0);
+
+  return (
+    <div
+      className={["kb-picker", compact ? "compact" : ""].filter(Boolean).join(" ")}
+      onBlur={(event) => {
+        const nextFocus = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+        if (!nextFocus || !event.currentTarget.contains(nextFocus)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="kb-picker-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Icon size={16} aria-hidden="true" />
+        <span>{label}</span>
+        <ChevronDown size={15} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="kb-picker-menu" role="menu">
+          {availableGroups.map((group) => (
+            <div className="kb-picker-group" key={group.label}>
+              <span>{group.label}</span>
+              {group.options.map((option, optionIndex) => {
+                const OptionIcon = option.icon;
+                return (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    key={`${group.label}-${option.label}-${optionIndex}`}
+                    onClick={() => {
+                      option.onSelect();
+                      setOpen(false);
+                    }}
+                  >
+                    <OptionIcon size={16} aria-hidden="true" />
+                    <span>
+                      <strong>{option.label}</strong>
+                      {option.detail && <small>{option.detail}</small>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
