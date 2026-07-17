@@ -129,6 +129,8 @@ type ActiveAddFlow = {
   startedAt: string;
   firingId?: string;
 };
+
+const FEED_PAGE_SIZE = 8;
 type PreviousFiringPayload = {
   title: string;
   kilnId: string;
@@ -3329,9 +3331,42 @@ function HomeScreen({
   clayBodies: ClayBodyProfile[];
   onOpenExplore: () => void;
 }) {
+  const feedKey = `${feedTab}:${posts.length}:${posts[0]?.id ?? "empty"}:${posts[posts.length - 1]?.id ?? "empty"}`;
+  const [feedWindow, setFeedWindow] = useState({ key: "", count: FEED_PAGE_SIZE });
+  const visiblePostCount = feedWindow.key === feedKey ? feedWindow.count : FEED_PAGE_SIZE;
+  const feedSentinelRef = useRef<HTMLDivElement | null>(null);
   const firingById = useMemo(() => createRecordMap(firings), [firings]);
   const glazeById = useMemo(() => createRecordMap(glazes), [glazes]);
   const clayBodyById = useMemo(() => createRecordMap(clayBodies), [clayBodies]);
+  const visiblePosts = useMemo(
+    () => posts.slice(0, visiblePostCount),
+    [posts, visiblePostCount],
+  );
+  const hasMorePosts = visiblePostCount < posts.length;
+
+  useEffect(() => {
+    const sentinel = feedSentinelRef.current;
+    if (!hasMorePosts || !sentinel || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setFeedWindow((window) => {
+          const count = window.key === feedKey ? window.count : FEED_PAGE_SIZE;
+          return {
+            key: feedKey,
+            count: Math.min(count + FEED_PAGE_SIZE, posts.length),
+          };
+        });
+      },
+      { rootMargin: "640px 0px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [feedKey, hasMorePosts, posts.length]);
 
   return (
     <div className="kb-home-grid">
@@ -3366,15 +3401,23 @@ function HomeScreen({
               onAction={onOpenExplore}
             />
           ) : (
-            posts.map((post) => (
-              <FeedCard
-                key={post.id}
-                post={post}
-                firing={post.linkedFiringId ? firingById.get(post.linkedFiringId) : undefined}
-                glaze={post.linkedGlazeId ? glazeById.get(post.linkedGlazeId) : undefined}
-                clayBody={post.linkedClayBodyId ? clayBodyById.get(post.linkedClayBodyId) : undefined}
-              />
-            ))
+            <>
+              {visiblePosts.map((post) => (
+                <FeedCard
+                  key={post.id}
+                  post={post}
+                  firing={post.linkedFiringId ? firingById.get(post.linkedFiringId) : undefined}
+                  glaze={post.linkedGlazeId ? glazeById.get(post.linkedGlazeId) : undefined}
+                  clayBody={post.linkedClayBodyId ? clayBodyById.get(post.linkedClayBodyId) : undefined}
+                />
+              ))}
+              {hasMorePosts && (
+                <div className="kb-feed-loader" ref={feedSentinelRef} role="status" aria-live="polite">
+                  <span aria-hidden="true" />
+                  <strong>Loading more posts</strong>
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>

@@ -230,8 +230,14 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(workspace, /Unknown or unrecorded firing/);
   assert.match(workspace, /Post context/);
   assert.match(workspace, /Optional records connected to this post/);
+  assert.match(workspace, /const FEED_PAGE_SIZE = 8/);
   assert.match(homeScreen, /kb-feed-head/);
+  assert.match(homeScreen, /posts\.slice\(0, visiblePostCount\)/);
+  assert.match(homeScreen, /IntersectionObserver/);
+  assert.match(homeScreen, /visiblePosts\.map/);
+  assert.match(homeScreen, /kb-feed-loader/);
   assert.doesNotMatch(homeScreen, /<PostComposer/);
+  assert.doesNotMatch(homeScreen, /posts\.map/);
   assert.doesNotMatch(workspace, /Each image can show different glazes/);
   assert.doesNotMatch(workspace, /Add profile/);
   assert.match(composer, /firings\.filter\(\(firing\) => firing\.ownerId === viewer\.id\)/);
@@ -250,6 +256,8 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(globals, /\.kb-image-annotation-list/);
   assert.match(globals, /\.kb-image-annotation/);
   assert.match(globals, /\.kb-add-group-button/);
+  assert.match(globals, /\.kb-feed-loader/);
+  assert.match(globals, /@keyframes kb-spin/);
 });
 
 test("workspace libraries are scoped to the signed-in viewer", async () => {
