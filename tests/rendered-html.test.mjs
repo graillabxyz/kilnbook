@@ -101,6 +101,7 @@ test("brand system is documented and wired into the app", async () => {
   assert.match(workspace, /BRAND_CHART_COLORS/);
   assert.match(workspace, /className="kb-brand-mark" src=\{BRAND_ASSETS\.logo\}/);
   assert.doesNotMatch(workspace, /kb-header-logo/);
+  assert.doesNotMatch(workspace, /kb-header-wordmark/);
   assert.match(brandConstants, /BRAND_PROFILE_COLORS/);
 });
 
@@ -116,6 +117,9 @@ test("mobile add and navigation follow the simplified Instagram-style order", as
   assert.match(workspace, /kind: "post"/);
   assert.match(workspace, /startAddFlow\("post", "public"\)/);
   assert.match(workspace, /function PostAddFlow/);
+  assert.match(workspace, /const showSearch = view === "Explore" && !isAddView/);
+  assert.match(workspace, /hidden=\{!showSearch\}/);
+  assert.match(workspace, /kb-workspace-chip/);
   assert.match(workspace, /MOBILE_SCROLL_VIEWS = new Set<View>\(\["Home", "Explore", "Profile", "Settings", "Add"\]\)/);
   assert.match(workspace, /const items: MobileNavItem\[\] = \[\n    \{ label: "Home"/);
   assert.match(workspace, /\{ label: "Add", icon: Plus, action: "add" \},\n    \{ label: "Search"/);

@@ -1964,37 +1964,25 @@ function Header({
   const connected = authStatus.state === "signed-in";
   const authBusy = authStatus.state === "loading";
   const authDisabled = authBusy || authStatus.state === "unconfigured";
+  const showSearch = view === "Explore" && !isAddView;
+  const pageTitle = view === "Home" ? "Home" : view === "Library" ? "Library" : view;
   return (
     <header
       className={[
         "kb-header",
         view === "Home" ? "kb-home-header" : "",
+        !showSearch ? "kb-header-no-search" : "",
         isAddView ? "kb-header-simple" : "",
       ].filter(Boolean).join(" ")}
     >
       <div className="kb-title-lockup">
         <div className="kb-title-text">
-          <p className="kb-kicker">Workspace</p>
-          {view === "Home" ? (
-            <>
-              <Image
-                className="kb-header-wordmark"
-                src={BRAND_ASSETS.wordmark}
-                alt=""
-                width={235}
-                height={39}
-                priority
-              />
-              <h1 className="sr-only">{PRODUCT.name}</h1>
-            </>
-          ) : (
-            <h1>{view === "Library" ? "Library" : view}</h1>
-          )}
+          <h1>{pageTitle}</h1>
         </div>
       </div>
       <form
         className="kb-search"
-        hidden={isAddView}
+        hidden={!showSearch}
         onSubmit={(event) => {
           event.preventDefault();
           onSearchSubmit();
@@ -2011,6 +1999,7 @@ function Header({
       <div className="kb-header-actions">
         {!isAddView && (
           <>
+            <span className="kb-workspace-chip">Workspace</span>
             <button
               type="button"
               className="kb-icon-button"

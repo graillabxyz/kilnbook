@@ -160,12 +160,6 @@ button:disabled {
   height: auto;
 }
 
-.kb-header-wordmark {
-  display: block;
-  width: min(14.8rem, 52vw);
-  height: auto;
-}
-
 .kb-wordmark-large {
   display: block;
   width: min(14.75rem, 62vw);
@@ -278,8 +272,12 @@ button:disabled {
   backdrop-filter: blur(18px);
 }
 
+.kb-header-no-search {
+  grid-template-columns: minmax(9rem, 1fr) auto;
+}
+
 .kb-header-simple {
-  grid-template-columns: minmax(9rem, 1fr);
+  grid-template-columns: minmax(9rem, 1fr) auto;
 }
 
 .kb-kicker {
@@ -355,10 +353,6 @@ button:disabled {
   flex: 0 0 auto;
 }
 
-.kb-title-text .kb-kicker {
-  margin-bottom: 0.05rem;
-}
-
 .kb-logo-heading {
   margin-bottom: 0.4rem;
 }
@@ -381,6 +375,10 @@ button:disabled {
   color: var(--kb-muted);
 }
 
+.kb-search[hidden] {
+  display: none;
+}
+
 .kb-search input {
   width: 100%;
   min-height: 100%;
@@ -394,6 +392,20 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+}
+
+.kb-workspace-chip {
+  min-height: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.62);
+  color: var(--kb-muted);
+  padding: 0 0.68rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .kb-icon-button,
@@ -3462,13 +3474,13 @@ button:disabled {
     font-size: 1.72rem;
   }
 
-  .kb-home-header .kb-header-wordmark {
-    width: min(12.8rem, 58vw);
-  }
-
   .kb-header-actions {
     justify-content: flex-end;
     min-width: 0;
+  }
+
+  .kb-workspace-chip {
+    display: none;
   }
 
   .kb-header-actions > .kb-icon-button,
