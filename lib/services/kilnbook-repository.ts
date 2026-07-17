@@ -32,7 +32,8 @@ import type {
 } from "../domain";
 import { readClientSupabaseEnv } from "../env";
 
-type Row = Record<string, unknown>;
+export type SupabaseRecordRow = Record<string, unknown>;
+type Row = SupabaseRecordRow;
 
 export interface KilnbookWorkspaceSnapshot {
   viewer: Profile;
@@ -191,7 +192,7 @@ function mapProfile(row: Row, authDetails?: Row): Profile {
   };
 }
 
-function mapGlaze(row: Row): GlazeProfile {
+export function mapGlaze(row: Row): GlazeProfile {
   const marketplaceEnabled = booleanValue(row.marketplace_enabled);
   return {
     id: text(row.id),
@@ -234,7 +235,7 @@ function mapGlaze(row: Row): GlazeProfile {
   };
 }
 
-function mapRecipeIngredient(row: Row): RecipeIngredient {
+export function mapRecipeIngredient(row: Row): RecipeIngredient {
   return {
     materialId: optionalText(row.material_id) ?? text(row.material_name_snapshot),
     materialName: text(row.material_name_snapshot, "Material"),
@@ -244,7 +245,7 @@ function mapRecipeIngredient(row: Row): RecipeIngredient {
   };
 }
 
-function mapGlazeRecipeVersion(
+export function mapGlazeRecipeVersion(
   row: Row,
   ingredients: RecipeIngredient[],
 ): GlazeRecipeVersion {
@@ -264,7 +265,7 @@ function mapGlazeRecipeVersion(
   };
 }
 
-function mapClayBody(row: Row): ClayBodyProfile {
+export function mapClayBody(row: Row): ClayBodyProfile {
   return {
     id: text(row.id),
     ownerId: text(row.owner_id),
@@ -287,7 +288,7 @@ function mapClayBody(row: Row): ClayBodyProfile {
   };
 }
 
-function mapKiln(row: Row): KilnProfile {
+export function mapKiln(row: Row): KilnProfile {
   return {
     id: text(row.id),
     ownerId: text(row.owner_id),
@@ -308,7 +309,7 @@ function mapKiln(row: Row): KilnProfile {
   };
 }
 
-function mapFiring(row: Row): FiringRecord {
+export function mapFiring(row: Row): FiringRecord {
   const kilnSpec =
     typeof row.kiln_spec_snapshot === "string"
       ? row.kiln_spec_snapshot

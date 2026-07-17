@@ -86,7 +86,16 @@ import {
   GLAZE_RESULT_SEARCH_FACETS,
 } from "@/lib/glaze-result-taxonomy";
 import { PRODUCT, PRIMARY_NAVIGATION, type PrimaryNavigationItem } from "@/lib/product";
-import type { KilnbookWorkspaceSnapshot } from "@/lib/services/kilnbook-repository";
+import {
+  mapClayBody,
+  mapFiring,
+  mapGlaze,
+  mapGlazeRecipeVersion,
+  mapKiln,
+  mapRecipeIngredient,
+  type KilnbookWorkspaceSnapshot,
+  type SupabaseRecordRow,
+} from "@/lib/services/kilnbook-repository";
 import {
   createSupabaseBrowserClient,
   isSupabaseBrowserConfigured,
@@ -729,6 +738,104 @@ function createRecordMap<T extends { id: string }>(records: T[]) {
   return new Map(records.map((record) => [record.id, record]));
 }
 
+function mergeRecordsById<T extends { id: string }>(existing: T[], incoming: T[]) {
+  if (incoming.length === 0) return existing;
+  const incomingIds = new Set(incoming.map((record) => record.id));
+  return [...incoming, ...existing.filter((record) => !incomingIds.has(record.id))];
+}
+
+function rowText(row: SupabaseRecordRow, key: string) {
+  const value = row[key];
+  return typeof value === "string" ? value : "";
+}
+
+async function readSupabaseRows(
+  promise: PromiseLike<{ data: SupabaseRecordRow[] | null; error: unknown }>,
+) {
+  const { data, error } = await promise;
+  if (error) throw error;
+  return data ?? [];
+}
+
+function groupRecipeIngredients(rows: SupabaseRecordRow[]) {
+  const grouped = new Map<string, RecipeIngredient[]>();
+  for (const row of rows) {
+    const recipeVersionId = rowText(row, "recipe_version_id");
+    if (!recipeVersionId) continue;
+    grouped.set(recipeVersionId, [
+      ...(grouped.get(recipeVersionId) ?? []),
+      mapRecipeIngredient(row),
+    ]);
+  }
+  return grouped;
+}
+
+function attachCurrentRecipeVersions(
+  glazes: GlazeProfile[],
+  recipeVersions: GlazeRecipeVersion[],
+) {
+  const latestRecipeIdByGlaze = new Map<string, string>();
+  for (const recipe of recipeVersions) {
+    const current = latestRecipeIdByGlaze.get(recipe.glazeId);
+    const currentVersion = current
+      ? recipeVersions.find((item) => item.id === current)?.versionNumber ?? 0
+      : 0;
+    if (recipe.versionNumber >= currentVersion) {
+      latestRecipeIdByGlaze.set(recipe.glazeId, recipe.id);
+    }
+  }
+  return glazes.map((glaze) => ({
+    ...glaze,
+    currentRecipeVersionId: latestRecipeIdByGlaze.get(glaze.id) ?? glaze.currentRecipeVersionId,
+  }));
+}
+
+async function readOwnedRecordLibraries(
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
+  userId: string,
+) {
+  const [kilnRows, clayRows, glazeRows, firingRows] = await Promise.all([
+    readSupabaseRows(supabase.from("kilns").select("*").eq("owner_id", userId).order("created_at", { ascending: false })),
+    readSupabaseRows(supabase.from("clay_bodies").select("*").eq("owner_id", userId).order("created_at", { ascending: false })),
+    readSupabaseRows(supabase.from("glazes").select("*").eq("owner_id", userId).order("created_at", { ascending: false })),
+    readSupabaseRows(supabase.from("firings").select("*").eq("owner_id", userId).order("created_at", { ascending: false })),
+  ]);
+  const glazeIds = glazeRows.map((row) => rowText(row, "id")).filter(Boolean);
+  const recipeRows =
+    glazeIds.length > 0
+      ? await readSupabaseRows(
+          supabase
+            .from("glaze_recipe_versions")
+            .select("*")
+            .in("glaze_id", glazeIds)
+            .order("created_at", { ascending: false }),
+        )
+      : [];
+  const recipeIds = recipeRows.map((row) => rowText(row, "id")).filter(Boolean);
+  const recipeIngredientRows =
+    recipeIds.length > 0
+      ? await readSupabaseRows(
+          supabase
+            .from("glaze_recipe_ingredients")
+            .select("*")
+            .in("recipe_version_id", recipeIds)
+            .order("display_order"),
+        )
+      : [];
+  const ingredientsByVersion = groupRecipeIngredients(recipeIngredientRows);
+  const recipeVersions = recipeRows.map((recipe) =>
+    mapGlazeRecipeVersion(recipe, ingredientsByVersion.get(rowText(recipe, "id")) ?? []),
+  );
+
+  return {
+    kilns: kilnRows.map(mapKiln),
+    clayBodies: clayRows.map(mapClayBody),
+    glazes: attachCurrentRecipeVersions(glazeRows.map(mapGlaze), recipeVersions),
+    glazeRecipeVersions: recipeVersions,
+    firings: firingRows.map(mapFiring),
+  };
+}
+
 function isMobileAppViewport() {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
 }
@@ -778,9 +885,55 @@ export function KilnbookWorkspace({
   const [addChooserOpen, setAddChooserOpen] = useState(false);
   const [addDrafts, setAddDrafts] = useState<AddDraft[]>([]);
   const [activeAddFlow, setActiveAddFlow] = useState<ActiveAddFlow | null>(null);
-  const kilnById = useMemo(() => createRecordMap(kilns), [kilns]);
-  const glazeById = useMemo(() => createRecordMap(glazes), [glazes]);
-  const firingById = useMemo(() => createRecordMap(firings), [firings]);
+  const workspaceKilns = useMemo(
+    () => kilns.filter((kiln) => kiln.ownerId === viewer.id),
+    [kilns, viewer.id],
+  );
+  const workspaceClayBodies = useMemo(
+    () => clayBodies.filter((clay) => clay.ownerId === viewer.id),
+    [clayBodies, viewer.id],
+  );
+  const workspaceGlazes = useMemo(
+    () => glazes.filter((glaze) => glaze.ownerId === viewer.id),
+    [glazes, viewer.id],
+  );
+  const workspaceFirings = useMemo(
+    () => firings.filter((firing) => firing.ownerId === viewer.id),
+    [firings, viewer.id],
+  );
+  const workspacePosts = useMemo(
+    () => snapshot.posts.filter((post) => post.authorId === viewer.id),
+    [snapshot.posts, viewer.id],
+  );
+  const workspaceKilnById = useMemo(() => createRecordMap(workspaceKilns), [workspaceKilns]);
+  const workspaceGlazeById = useMemo(() => createRecordMap(workspaceGlazes), [workspaceGlazes]);
+  const workspaceFiringById = useMemo(() => createRecordMap(workspaceFirings), [workspaceFirings]);
+  const workspaceGlazeIds = useMemo(
+    () => new Set(workspaceGlazes.map((glaze) => glaze.id)),
+    [workspaceGlazes],
+  );
+  const workspaceFiringIds = useMemo(
+    () => new Set(workspaceFirings.map((firing) => firing.id)),
+    [workspaceFirings],
+  );
+  const workspaceClayBodyIds = useMemo(
+    () => new Set(workspaceClayBodies.map((clay) => clay.id)),
+    [workspaceClayBodies],
+  );
+  const workspaceGlazeRecipeVersions = useMemo(
+    () => glazeRecipeVersions.filter((recipe) => workspaceGlazeIds.has(recipe.glazeId)),
+    [glazeRecipeVersions, workspaceGlazeIds],
+  );
+  const workspaceApplications = useMemo(
+    () =>
+      snapshot.glazeApplications.filter(
+        (application) =>
+          workspaceFiringIds.has(application.firingId) ||
+          workspaceGlazeIds.has(application.glazeId) ||
+          (application.clayBodyId ? workspaceClayBodyIds.has(application.clayBodyId) : false),
+      ),
+    [snapshot.glazeApplications, workspaceClayBodyIds, workspaceFiringIds, workspaceGlazeIds],
+  );
   const environmentByFiringId = useMemo(
     () => new Map(environmentRecords.map((record) => [record.firingId, record])),
     [environmentRecords],
@@ -853,20 +1006,56 @@ export function KilnbookWorkspace({
   }, [snapshot.profiles, snapshot.viewer]);
 
   useEffect(() => {
+    if (authStatus.state !== "signed-in" || viewer.id === "anonymous" || !isSupabaseBrowserConfigured()) {
+      return undefined;
+    }
+
+    let active = true;
+    const supabase = createSupabaseBrowserClient();
+
+    readOwnedRecordLibraries(supabase, viewer.id)
+      .then((owned) => {
+        if (!active) return;
+        setKilns((items) => mergeRecordsById(items, owned.kilns));
+        setClayBodies((items) => mergeRecordsById(items, owned.clayBodies));
+        setGlazes((items) => mergeRecordsById(items, owned.glazes));
+        setGlazeRecipeVersions((items) => mergeRecordsById(items, owned.glazeRecipeVersions));
+        setFirings((items) => mergeRecordsById(items, owned.firings));
+        if (owned.firings.length > 0) {
+          setSelectedFiringId((current) =>
+            owned.firings.some((firing) => firing.id === current) ? current : owned.firings[0].id,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        console.error("Unable to refresh owned Supabase records", error);
+        setAuthStatus({
+          state: "signed-in",
+          message: "Signed in. Some private records could not be refreshed.",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authStatus.state, viewer.id]);
+
+  useEffect(() => {
     window.localStorage.setItem("flux-and-fire.feed-tab", feedTab);
   }, [feedTab]);
 
   const selectedFiring = useMemo(
-    () => firingById.get(selectedFiringId) ?? firings[0],
-    [firingById, firings, selectedFiringId],
+    () => workspaceFiringById.get(selectedFiringId) ?? workspaceFirings[0],
+    [workspaceFiringById, workspaceFirings, selectedFiringId],
   );
   const selectedKiln = useMemo(
-    () => (selectedFiring ? kilnById.get(selectedFiring.kilnId) : undefined),
-    [kilnById, selectedFiring],
+    () => (selectedFiring ? workspaceKilnById.get(selectedFiring.kilnId) : undefined),
+    [workspaceKilnById, selectedFiring],
   );
   const activeFiring = useMemo(
-    () => (activeAddFlow?.firingId ? firingById.get(activeAddFlow.firingId) : undefined),
-    [activeAddFlow, firingById],
+    () => (activeAddFlow?.firingId ? workspaceFiringById.get(activeAddFlow.firingId) : undefined),
+    [activeAddFlow, workspaceFiringById],
   );
   const activeEnvironment = useMemo(
     () =>
@@ -912,7 +1101,7 @@ export function KilnbookWorkspace({
           "indoors",
         humidityPercentage: selectedEnvironment?.humidityStartPercentage ?? 64,
         windSpeedKph: selectedEnvironment?.windSpeedKph ?? 14,
-        comparableFirings: firings
+        comparableFirings: workspaceFirings
           .filter((firing) => firing.id !== selectedFiring?.id && firing.totalHeatingMinutes)
           .map((firing) => ({
             id: firing.id,
@@ -924,7 +1113,7 @@ export function KilnbookWorkspace({
             totalCoolingMinutes: firing.totalCoolingMinutes ?? 0,
           })),
       }),
-    [firings, selectedEnvironment, selectedFiring, selectedKiln],
+    [workspaceFirings, selectedEnvironment, selectedFiring, selectedKiln],
   );
 
   const handleQuickReading = () => {
@@ -1016,13 +1205,13 @@ export function KilnbookWorkspace({
   };
 
   const handleCreateFiring = (values: FiringFormValues) => {
-    const kiln = kilnById.get(values.kilnId);
+    const kiln = workspaceKilnById.get(values.kilnId);
     const createdAt = new Date().toISOString();
     const newFiring: FiringRecord = {
       id: `firing-${Date.now()}`,
       ownerId: viewer.id,
       title: values.title,
-      readableNumber: `Firing ${String(firings.length + 40).padStart(3, "0")}`,
+      readableNumber: `Firing ${String(workspaceFirings.length + 1).padStart(3, "0")}`,
       kilnId: values.kilnId,
       kilnNameSnapshot: kiln?.name ?? "Unknown kiln",
       kilnSpecSnapshot: kiln
@@ -1089,7 +1278,7 @@ export function KilnbookWorkspace({
     const profile: GlazeProfile = {
       id: profileId,
       ownerId: viewer.id,
-      name: `Draft glaze profile ${glazes.length + 1}`,
+      name: `Draft glaze profile ${workspaceGlazes.length + 1}`,
       creatorAttribution: viewer.displayName,
       source: "Created from post composer",
       glazeType: "studio_test",
@@ -1127,7 +1316,7 @@ export function KilnbookWorkspace({
     const profile: ClayBodyProfile = {
       id: createClientRecordId("clay"),
       ownerId: viewer.id,
-      name: `Draft clay body profile ${clayBodies.length + 1}`,
+      name: `Draft clay body profile ${workspaceClayBodies.length + 1}`,
       manufacturer: "Studio mixed",
       supplier: "Studio",
       bodyType: "stoneware",
@@ -1151,7 +1340,7 @@ export function KilnbookWorkspace({
     const profile: KilnProfile = {
       id: createClientRecordId("kiln"),
       ownerId: viewer.id,
-      name: `Draft kiln profile ${kilns.length + 1}`,
+      name: `Draft kiln profile ${workspaceKilns.length + 1}`,
       manufacturer: "Unknown",
       model: "Draft",
       kilnType: "electric",
@@ -1175,7 +1364,8 @@ export function KilnbookWorkspace({
     createdAt: string,
     payload?: Partial<PreviousFiringPayload>,
   ) => {
-    const kiln = (payload?.kilnId ? kilnById.get(payload.kilnId) : undefined) ?? kilns[0];
+    const kiln =
+      (payload?.kilnId ? workspaceKilnById.get(payload.kilnId) : undefined) ?? workspaceKilns[0];
     const newFiring: FiringRecord = {
       id: `firing-add-${Date.now()}`,
       ownerId: viewer.id,
@@ -1184,7 +1374,7 @@ export function KilnbookWorkspace({
         (kind === "live_firing"
           ? `Live firing ${new Date(createdAt).toLocaleDateString()}`
           : "Previous firing record"),
-      readableNumber: `Firing ${String(firings.length + 40).padStart(3, "0")}`,
+      readableNumber: `Firing ${String(workspaceFirings.length + 1).padStart(3, "0")}`,
       kilnId: kiln?.id ?? "kiln-draft",
       kilnNameSnapshot: kiln?.name ?? "Select kiln",
       kilnSpecSnapshot: kiln
@@ -1267,7 +1457,7 @@ export function KilnbookWorkspace({
 
     if (kind === "live_firing") {
       const firing = createAddFiring("live_firing", visibility, createdAt);
-      const kiln = kilnById.get(firing.kilnId);
+      const kiln = workspaceKilnById.get(firing.kilnId);
       firingId = firing.id;
       upsertEnvironmentRecord(
         firing.id,
@@ -1409,8 +1599,8 @@ export function KilnbookWorkspace({
   };
 
   const handleSaveGlazeResult = (payload: GlazeResultPayload) => {
-    const glaze = glazeById.get(payload.glazeId);
-    const firing = firingById.get(payload.firingId);
+    const glaze = workspaceGlazeById.get(payload.glazeId);
+    const firing = workspaceFiringById.get(payload.firingId);
     recordAddDraft(
       "glaze_result",
       payload.visibility,
@@ -1421,7 +1611,7 @@ export function KilnbookWorkspace({
   };
 
   const handleUpdateLiveFiringSetup = (firingId: string, payload: LiveFiringSetupPayload) => {
-    const kiln = kilnById.get(payload.kilnId);
+    const kiln = workspaceKilnById.get(payload.kilnId);
     setFirings((items) =>
       items.map((firing) =>
         firing.id === firingId
@@ -1459,7 +1649,7 @@ export function KilnbookWorkspace({
           : firing,
       ),
     );
-    const firing = firingById.get(firingId);
+    const firing = workspaceFiringById.get(firingId);
     const draftVisibility: AddVisibility =
       firing?.visibility === "private" || firing?.visibility === "followers" || firing?.visibility === "public"
         ? firing.visibility
@@ -1502,12 +1692,12 @@ export function KilnbookWorkspace({
             <AddFlowScreen
               flow={activeAddFlow}
               viewer={viewer}
-              firings={firings}
+              firings={workspaceFirings}
               activeFiring={activeFiring}
               activeEnvironment={activeEnvironment}
-              kilns={kilns}
-              glazes={glazes}
-              clayBodies={clayBodies}
+              kilns={workspaceKilns}
+              glazes={workspaceGlazes}
+              clayBodies={workspaceClayBodies}
               ratePoints={ratePoints}
               estimate={estimate}
               onBack={() => setActiveAddFlow(null)}
@@ -1537,21 +1727,21 @@ export function KilnbookWorkspace({
           ) : null}
           {!activeAddFlow && view === "Dashboard" && (
             <DashboardScreen
-              firings={firings}
-              glazes={glazes}
-              clayBodies={clayBodies}
+              firings={workspaceFirings}
+              glazes={workspaceGlazes}
+              clayBodies={workspaceClayBodies}
               selectedFiring={selectedFiring}
               ratePoints={ratePoints}
             />
           )}
-          {!activeAddFlow && view === "Firings" && selectedFiring && (
+          {!activeAddFlow && view === "Firings" && (
             <FiringsScreen
-              firings={firings}
+              firings={workspaceFirings}
               selectedFiring={selectedFiring}
-              kilns={kilns}
-              glazes={glazes}
-              clayBodies={clayBodies}
-              applications={snapshot.glazeApplications}
+              kilns={workspaceKilns}
+              glazes={workspaceGlazes}
+              clayBodies={workspaceClayBodies}
+              applications={workspaceApplications}
               ratePoints={ratePoints}
               estimate={estimate}
               imageTags={imageTags}
@@ -1567,11 +1757,11 @@ export function KilnbookWorkspace({
           {!activeAddFlow && view === "Glazes" && (
             <GlazesScreen
               viewer={viewer}
-              glazes={glazes}
-              recipes={glazeRecipeVersions}
-              applications={snapshot.glazeApplications}
-              clayBodies={clayBodies}
-              firings={firings}
+              glazes={workspaceGlazes}
+              recipes={workspaceGlazeRecipeVersions}
+              applications={workspaceApplications}
+              clayBodies={workspaceClayBodies}
+              firings={workspaceFirings}
               addDrafts={addDrafts.filter((draft) =>
                 draft.kind === "glaze_recipe" || draft.kind === "glaze_result",
               )}
@@ -1581,18 +1771,18 @@ export function KilnbookWorkspace({
           {!activeAddFlow && view === "Clay Bodies" && (
             <ClayBodiesScreen
               viewer={viewer}
-              clayBodies={clayBodies}
-              glazes={glazes}
-              applications={snapshot.glazeApplications}
-              firings={firings}
+              clayBodies={workspaceClayBodies}
+              glazes={workspaceGlazes}
+              applications={workspaceApplications}
+              firings={workspaceFirings}
               onCreateClayBodyProfile={handleCreateClayBodyProfile}
             />
           )}
           {!activeAddFlow && view === "Kilns" && (
             <KilnsScreen
               viewer={viewer}
-              kilns={kilns}
-              firings={firings}
+              kilns={workspaceKilns}
+              firings={workspaceFirings}
               onCreateKilnProfile={handleCreateKilnProfile}
             />
           )}
@@ -1612,17 +1802,17 @@ export function KilnbookWorkspace({
           {!activeAddFlow && view === "Analytics" && (
             <AnalyticsScreen
               plan={viewer.subscriptionTier}
-              firings={firings}
-              glazes={glazes}
-              clayBodies={clayBodies}
+              firings={workspaceFirings}
+              glazes={workspaceGlazes}
+              clayBodies={workspaceClayBodies}
             />
           )}
           {!activeAddFlow && view === "Profile" && (
             <ProfileScreen
               viewer={viewer}
               authStatus={authStatus}
-              glazes={glazes}
-              posts={snapshot.posts}
+              glazes={workspaceGlazes}
+              posts={workspacePosts}
               drafts={addDrafts}
               onOpenSettings={() => setView("Settings")}
               onGoogleSignIn={handleGoogleSignIn}
@@ -1637,9 +1827,9 @@ export function KilnbookWorkspace({
           )}
           {!activeAddFlow && view === "Library" && (
             <LibraryScreen
-              glazes={glazes}
-              clayBodies={clayBodies}
-              kilns={kilns}
+              glazes={workspaceGlazes}
+              clayBodies={workspaceClayBodies}
+              kilns={workspaceKilns}
               onViewChange={setView}
             />
           )}
@@ -3940,6 +4130,7 @@ function DashboardScreen({
   const timeframeLabel =
     timeframe === "all" ? "All time" : timeframe === "365" ? "This year" : `Last ${timeframe} days`;
   const latestFiringTime = Math.max(
+    0,
     ...firings
       .map((firing) => new Date(firing.actualStartAt ?? firing.plannedStartAt ?? 0).getTime())
       .filter(Number.isFinite),
@@ -3988,27 +4179,35 @@ function DashboardScreen({
           <MetricCard label="Total firings" value={String(filteredFirings.length)} detail={`${completed.length} completed`} icon={Flame} />
           <MetricCard label="Kiln hours" value={kilnHours.toFixed(1)} detail="Heating time recorded" icon={Gauge} />
           <MetricCard label="Successful results" value={`${Math.round(successAverage)}%`} detail="Based on rated applications" icon={CheckCircle2} />
-          <MetricCard label="Glaze tests" value={String(glazes.length + 5)} detail={`${clayBodies.length} clay bodies represented`} icon={Layers3} />
+          <MetricCard label="Glaze tests" value={String(glazes.length)} detail={`${clayBodies.length} clay bodies represented`} icon={Layers3} />
         </div>
       </section>
       <section className="kb-grid-two equal">
         <div className="kb-panel">
           <div className="kb-section-title compact">
-            <h3>Actual curve · {selectedFiring?.readableNumber}</h3>
+            <h3>{selectedFiring ? `Actual curve · ${selectedFiring.readableNumber}` : "Actual curve"}</h3>
             <span>Manual readings</span>
           </div>
-          <div className="kb-chart">
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={ratePoints}>
-                <CartesianGrid strokeDasharray="4 6" stroke={BRAND_CHART_COLORS.grid} />
-                <XAxis dataKey="elapsedMinutes" tickFormatter={(value) => `${value / 60}h`} />
-                <YAxis tickFormatter={(value) => `${value}C`} />
-                <Tooltip formatter={(value) => [`${value}C`, "Temperature"]} />
-                <Line type="monotone" dataKey="actualTemperatureC" stroke={BRAND_CHART_COLORS.actual} strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="targetTemperatureC" stroke={BRAND_CHART_COLORS.target} strokeWidth={2} strokeDasharray="5 5" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {selectedFiring ? (
+            <div className="kb-chart">
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={ratePoints}>
+                  <CartesianGrid strokeDasharray="4 6" stroke={BRAND_CHART_COLORS.grid} />
+                  <XAxis dataKey="elapsedMinutes" tickFormatter={(value) => `${value / 60}h`} />
+                  <YAxis tickFormatter={(value) => `${value}C`} />
+                  <Tooltip formatter={(value) => [`${value}C`, "Temperature"]} />
+                  <Line type="monotone" dataKey="actualTemperatureC" stroke={BRAND_CHART_COLORS.actual} strokeWidth={3} dot={false} />
+                  <Line type="monotone" dataKey="targetTemperatureC" stroke={BRAND_CHART_COLORS.target} strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="kb-empty-state compact">
+              <Flame size={20} aria-hidden="true" />
+              <h3>No firing selected</h3>
+              <p>Create or backfill a firing to start charting temperature readings.</p>
+            </div>
+          )}
         </div>
         <div className="kb-panel">
           <div className="kb-section-title compact">
@@ -4049,7 +4248,7 @@ function FiringsScreen({
   addDrafts,
 }: {
   firings: FiringRecord[];
-  selectedFiring: FiringRecord;
+  selectedFiring?: FiringRecord;
   kilns: KilnProfile[];
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
@@ -4063,6 +4262,8 @@ function FiringsScreen({
   onTagsChange: (tags: string[]) => void;
   addDrafts: AddDraft[];
 }) {
+  const canPlanFiring = kilns.length > 0 && glazes.length > 0 && clayBodies.length > 0;
+
   return (
     <div className="kb-grid-two">
       <section className="kb-panel">
@@ -4075,51 +4276,74 @@ function FiringsScreen({
         <AddDraftList drafts={addDrafts} />
         <div className="kb-firing-layout">
           <div className="kb-list kb-firing-list">
-            {firings.map((firing) => (
-              <button
-                key={firing.id}
-                type="button"
-                className={selectedFiring.id === firing.id ? "kb-firing-select active" : "kb-firing-select"}
-                onClick={() => onSelectFiring(firing.id)}
-              >
-                <strong>{firing.readableNumber}</strong>
-                <span>{firing.title}</span>
-                <small>{firing.status.replaceAll("_", " ")} · Cone {firing.targetCone}</small>
-              </button>
-            ))}
-          </div>
-          <div className="kb-detail">
-            <div className="kb-detail-head">
-              <div>
-                <h3>{selectedFiring.title}</h3>
-                <span>{selectedFiring.kilnNameSnapshot} · {selectedFiring.kilnSpecSnapshot}</span>
+            {firings.length > 0 ? (
+              firings.map((firing) => (
+                <button
+                  key={firing.id}
+                  type="button"
+                  className={selectedFiring?.id === firing.id ? "kb-firing-select active" : "kb-firing-select"}
+                  onClick={() => onSelectFiring(firing.id)}
+                >
+                  <strong>{firing.readableNumber}</strong>
+                  <span>{firing.title}</span>
+                  <small>{firing.status.replaceAll("_", " ")} · Cone {firing.targetCone}</small>
+                </button>
+              ))
+            ) : (
+              <div className="kb-empty-inline">
+                <Flame size={18} aria-hidden="true" />
+                <span>No firing records yet</span>
               </div>
-              <VisibilityPill visibility={selectedFiring.visibility} />
-            </div>
-            <div className="kb-metrics compact">
-              <MetricCard label="Target" value={formatTemperature(selectedFiring.targetTemperatureC, "c")} detail={`Cone ${selectedFiring.targetCone}`} icon={Thermometer} />
-              <MetricCard label="Atmosphere" value={selectedFiring.atmosphere.replaceAll("_", " ")} detail={selectedFiring.firingType} icon={CloudSun} />
-              <MetricCard label="Load" value={`${selectedFiring.loadFullnessPercentage}%`} detail="Estimated fullness" icon={ClipboardList} />
-            </div>
-            <LiveFiringPanel
-              selectedFiring={selectedFiring}
-              ratePoints={ratePoints}
-              estimate={estimate}
-              onQuickReading={onQuickReading}
-            />
-            <ScheduleEditor ratePoints={ratePoints} />
-            <ResultPanel
-              applications={applications.filter((app) => app.firingId === selectedFiring.id)}
-              glazes={glazes}
-              clayBodies={clayBodies}
-              imageTags={imageTags}
-              onTagsChange={onTagsChange}
-            />
+            )}
           </div>
+          {selectedFiring ? (
+            <div className="kb-detail">
+              <div className="kb-detail-head">
+                <div>
+                  <h3>{selectedFiring.title}</h3>
+                  <span>{selectedFiring.kilnNameSnapshot} · {selectedFiring.kilnSpecSnapshot}</span>
+                </div>
+                <VisibilityPill visibility={selectedFiring.visibility} />
+              </div>
+              <div className="kb-metrics compact">
+                <MetricCard label="Target" value={formatTemperature(selectedFiring.targetTemperatureC, "c")} detail={`Cone ${selectedFiring.targetCone}`} icon={Thermometer} />
+                <MetricCard label="Atmosphere" value={selectedFiring.atmosphere.replaceAll("_", " ")} detail={selectedFiring.firingType} icon={CloudSun} />
+                <MetricCard label="Load" value={`${selectedFiring.loadFullnessPercentage}%`} detail="Estimated fullness" icon={ClipboardList} />
+              </div>
+              <LiveFiringPanel
+                selectedFiring={selectedFiring}
+                ratePoints={ratePoints}
+                estimate={estimate}
+                onQuickReading={onQuickReading}
+              />
+              <ScheduleEditor ratePoints={ratePoints} />
+              <ResultPanel
+                applications={applications.filter((app) => app.firingId === selectedFiring.id)}
+                glazes={glazes}
+                clayBodies={clayBodies}
+                imageTags={imageTags}
+                onTagsChange={onTagsChange}
+              />
+            </div>
+          ) : (
+            <div className="kb-detail kb-empty-state">
+              <Flame size={22} aria-hidden="true" />
+              <h3>No firings in your library</h3>
+              <p>Start a live firing or backfill a previous firing from Add to build your process history.</p>
+            </div>
+          )}
         </div>
       </section>
       <aside className="kb-stack">
-        <CreateFiringForm kilns={kilns} glazes={glazes} clayBodies={clayBodies} onSubmit={onCreateFiring} />
+        {canPlanFiring ? (
+          <CreateFiringForm kilns={kilns} glazes={glazes} clayBodies={clayBodies} onSubmit={onCreateFiring} />
+        ) : (
+          <section className="kb-panel kb-empty-state">
+            <ClipboardList size={22} aria-hidden="true" />
+            <h3>Set up firing basics</h3>
+            <p>Add at least one kiln, glaze, and clay body before planning a structured firing here.</p>
+          </section>
+        )}
         <FiringComparison firings={firings} />
       </aside>
     </div>
@@ -4512,16 +4736,23 @@ function FiringComparison({ firings }: { firings: FiringRecord[] }) {
     <section className="kb-panel">
       <div className="kb-section-title compact">
         <h3>Firing comparison</h3>
-        <span>2 to 5 firings</span>
+        <span>{firings.length > 0 ? "2 to 5 firings" : "No records yet"}</span>
       </div>
       <div className="kb-comparison-list">
-        {firings.slice(0, 3).map((firing) => (
-          <div key={firing.id}>
-            <strong>{firing.readableNumber}</strong>
-            <span>{formatTemperature(firing.targetTemperatureC, "c")} · {firing.atmosphere.replaceAll("_", " ")}</span>
-            <progress value={firing.successRating ?? 60} max={100} aria-label={`${firing.readableNumber} result score`} />
+        {firings.length > 0 ? (
+          firings.slice(0, 3).map((firing) => (
+            <div key={firing.id}>
+              <strong>{firing.readableNumber}</strong>
+              <span>{formatTemperature(firing.targetTemperatureC, "c")} · {firing.atmosphere.replaceAll("_", " ")}</span>
+              <progress value={firing.successRating ?? 60} max={100} aria-label={`${firing.readableNumber} result score`} />
+            </div>
+          ))
+        ) : (
+          <div className="kb-empty-inline">
+            <Flame size={18} aria-hidden="true" />
+            <span>No firings to compare</span>
           </div>
-        ))}
+        )}
       </div>
     </section>
   );
@@ -4575,21 +4806,29 @@ function GlazesScreen({
         </div>
         <AddDraftList drafts={addDrafts} />
         <div className="kb-library-grid">
-          {glazes.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={item.id === glaze?.id ? "kb-library-select active" : "kb-library-select"}
-              onClick={() => setSelectedGlazeId(item.id)}
-            >
-              <LibraryCard
-                title={item.name}
-                eyebrow={item.source}
-                detail={`${item.coneRange} · ${item.surface}`}
-                color={item.heroImageColor}
-              />
-            </button>
-          ))}
+          {glazes.length > 0 ? (
+            glazes.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={item.id === glaze?.id ? "kb-library-select active" : "kb-library-select"}
+                onClick={() => setSelectedGlazeId(item.id)}
+              >
+                <LibraryCard
+                  title={item.name}
+                  eyebrow={item.source}
+                  detail={`${item.coneRange} · ${item.surface}`}
+                  color={item.heroImageColor}
+                />
+              </button>
+            ))
+          ) : (
+            <div className="kb-empty-state compact">
+              <Layers3 size={20} aria-hidden="true" />
+              <h3>No glazes in your library</h3>
+              <p>Add a recipe or import a common supplier glaze to start collecting results.</p>
+            </div>
+          )}
         </div>
       </section>
       <aside className="kb-stack">
@@ -4631,13 +4870,20 @@ function GlazesScreen({
                 <h3>Recipe editor</h3>
                 <span>Historical versions</span>
               </div>
-              {glazeRecipes.map((recipe) => (
-                <div className="kb-version-row" key={`${recipe.glazeId}-${recipe.versionNumber}`}>
-                  <strong>Version {recipe.versionNumber}</strong>
-                  <span>{recipe.changeSummary}</span>
-                  <small>{recipe.ingredients.length} ingredients · {recipe.visibility}</small>
+              {glazeRecipes.length > 0 ? (
+                glazeRecipes.map((recipe) => (
+                  <div className="kb-version-row" key={`${recipe.glazeId}-${recipe.versionNumber}`}>
+                    <strong>Version {recipe.versionNumber}</strong>
+                    <span>{recipe.changeSummary}</span>
+                    <small>{recipe.ingredients.length} ingredients · {recipe.visibility}</small>
+                  </div>
+                ))
+              ) : (
+                <div className="kb-empty-inline">
+                  <Layers3 size={18} aria-hidden="true" />
+                  <span>No recipe versions saved yet</span>
                 </div>
-              ))}
+              )}
             </section>
             <section className="kb-panel kb-record-detail-panel">
               <div className="kb-section-title compact">
@@ -4845,21 +5091,29 @@ function ClayBodiesScreen({
           </button>
         </div>
         <div className="kb-library-grid">
-          {clayBodies.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={item.id === clay?.id ? "kb-library-select active" : "kb-library-select"}
-              onClick={() => setSelectedClayId(item.id)}
-            >
-              <LibraryCard
-                title={item.name}
-                eyebrow={`${item.manufacturer} · ${item.bodyType}`}
-                detail={`${item.coneRange} · ${item.firedColor}`}
-                color={item.imageColor}
-              />
-            </button>
-          ))}
+          {clayBodies.length > 0 ? (
+            clayBodies.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={item.id === clay?.id ? "kb-library-select active" : "kb-library-select"}
+                onClick={() => setSelectedClayId(item.id)}
+              >
+                <LibraryCard
+                  title={item.name}
+                  eyebrow={`${item.manufacturer} · ${item.bodyType}`}
+                  detail={`${item.coneRange} · ${item.firedColor}`}
+                  color={item.imageColor}
+                />
+              </button>
+            ))
+          ) : (
+            <div className="kb-empty-state compact">
+              <Microscope size={20} aria-hidden="true" />
+              <h3>No clay bodies in your library</h3>
+              <p>Add a studio clay body or a common commercial body before tagging results.</p>
+            </div>
+          )}
         </div>
       </section>
       <aside className="kb-panel kb-record-detail-panel">
@@ -4953,21 +5207,29 @@ function KilnsScreen({
           </button>
         </div>
         <div className="kb-library-grid">
-          {kilns.map((kiln) => (
-            <button
-              type="button"
-              key={kiln.id}
-              className={kiln.id === selectedKiln?.id ? "kb-library-select active" : "kb-library-select"}
-              onClick={() => setSelectedKilnId(kiln.id)}
-            >
-              <LibraryCard
-                title={kiln.name}
-                eyebrow={`${kiln.manufacturer} ${kiln.model}`}
-                detail={`${kiln.usableVolumeLiters} L · ${kiln.recommendedConeRange}`}
-                color={kiln.kilnType === "electric" ? BRAND_COLORS.cobalt : BRAND_COLORS.iron}
-              />
-            </button>
-          ))}
+          {kilns.length > 0 ? (
+            kilns.map((kiln) => (
+              <button
+                type="button"
+                key={kiln.id}
+                className={kiln.id === selectedKiln?.id ? "kb-library-select active" : "kb-library-select"}
+                onClick={() => setSelectedKilnId(kiln.id)}
+              >
+                <LibraryCard
+                  title={kiln.name}
+                  eyebrow={`${kiln.manufacturer} ${kiln.model}`}
+                  detail={`${kiln.usableVolumeLiters} L · ${kiln.recommendedConeRange}`}
+                  color={kiln.kilnType === "electric" ? BRAND_COLORS.cobalt : BRAND_COLORS.iron}
+                />
+              </button>
+            ))
+          ) : (
+            <div className="kb-empty-state compact">
+              <Gauge size={20} aria-hidden="true" />
+              <h3>No kilns in your library</h3>
+              <p>Add a kiln profile before tracking live firings or historical firing records.</p>
+            </div>
+          )}
         </div>
       </section>
       <aside className="kb-stack">

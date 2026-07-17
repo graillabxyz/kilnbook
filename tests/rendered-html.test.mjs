@@ -242,6 +242,28 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(globals, /\.kb-add-group-button/);
 });
 
+test("workspace libraries are scoped to the signed-in viewer", async () => {
+  const workspace = await readFile(new URL("../app/kilnbook-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(workspace, /readOwnedRecordLibraries\(supabase, viewer\.id\)/);
+  assert.match(workspace, /kilns\.filter\(\(kiln\) => kiln\.ownerId === viewer\.id\)/);
+  assert.match(workspace, /glazes\.filter\(\(glaze\) => glaze\.ownerId === viewer\.id\)/);
+  assert.match(workspace, /clayBodies\.filter\(\(clay\) => clay\.ownerId === viewer\.id\)/);
+  assert.match(workspace, /firings\.filter\(\(firing\) => firing\.ownerId === viewer\.id\)/);
+  assert.match(workspace, /snapshot\.posts\.filter\(\(post\) => post\.authorId === viewer\.id\)/);
+  assert.match(workspace, /<DashboardScreen\s+firings=\{workspaceFirings\}\s+glazes=\{workspaceGlazes\}\s+clayBodies=\{workspaceClayBodies\}/);
+  assert.match(workspace, /<FiringsScreen\s+firings=\{workspaceFirings\}/);
+  assert.match(workspace, /<GlazesScreen\s+viewer=\{viewer\}\s+glazes=\{workspaceGlazes\}/);
+  assert.match(workspace, /<ClayBodiesScreen\s+viewer=\{viewer\}\s+clayBodies=\{workspaceClayBodies\}/);
+  assert.match(workspace, /<KilnsScreen\s+viewer=\{viewer\}\s+kilns=\{workspaceKilns\}/);
+  assert.match(workspace, /<ProfileScreen\s+viewer=\{viewer\}\s+authStatus=\{authStatus\}\s+glazes=\{workspaceGlazes\}\s+posts=\{workspacePosts\}/);
+  assert.doesNotMatch(workspace, /Glaze tests" value=\{String\(glazes\.length \+ 5\)\}/);
+  assert.match(workspace, /No firings in your library/);
+  assert.match(workspace, /No glazes in your library/);
+  assert.match(workspace, /No clay bodies in your library/);
+  assert.match(workspace, /No kilns in your library/);
+});
+
 test("Glazy research informs the social-first glaze result database structure", async () => {
   const [researchDoc, uxDoc, phasePlan, taxonomy, workspace, globals] = await Promise.all([
     readFile(new URL("../docs/glazy-research.md", import.meta.url), "utf8"),
