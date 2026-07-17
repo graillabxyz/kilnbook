@@ -140,6 +140,9 @@ test("glaze, clay body, and kiln libraries use real creation flows", async () =>
   assert.match(workspace, /function GlazeCreateDialog/);
   assert.match(workspace, /function ClayBodyCreateDialog/);
   assert.match(workspace, /function KilnCreateDialog/);
+  assert.match(workspace, /kb-firing-select/);
+  assert.match(workspace, /kb-record-detail-panel/);
+  assert.match(workspace, /kb-library-card-copy/);
   assert.match(workspace, /persistGlazeRecord/);
   assert.match(workspace, /persistClayBodyProfile/);
   assert.match(workspace, /persistKilnProfile/);
@@ -156,6 +159,12 @@ test("glaze, clay body, and kiln libraries use real creation flows", async () =>
   assert.match(globals, /\.kb-ingredient-row/);
   assert.match(globals, /\.kb-swatch-picker/);
   assert.match(globals, /\.kb-library-select\.active/);
+  assert.match(globals, /\.kb-nav button\s*\{\n  min-height: 2\.75rem;\n  display: grid;\n  grid-template-columns: 1\.55rem minmax\(0, 1fr\);/);
+  assert.match(globals, /\.kb-firing-select/);
+  assert.match(globals, /grid-template-areas:\n    "number title"\n    "number meta"/);
+  assert.match(globals, /\.kb-library-card-copy/);
+  assert.match(globals, /\.kb-record-detail-panel/);
+  assert.match(globals, /\.kb-linked-row\s*\{\n  grid-template-columns: minmax\(0, 1fr\) auto auto;/);
 });
 
 test("messages, profile, and settings use modern social layouts", async () => {

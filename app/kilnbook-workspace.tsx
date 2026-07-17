@@ -4074,12 +4074,12 @@ function FiringsScreen({
         </div>
         <AddDraftList drafts={addDrafts} />
         <div className="kb-firing-layout">
-          <div className="kb-list">
+          <div className="kb-list kb-firing-list">
             {firings.map((firing) => (
               <button
                 key={firing.id}
                 type="button"
-                className={selectedFiring.id === firing.id ? "active" : ""}
+                className={selectedFiring.id === firing.id ? "kb-firing-select active" : "kb-firing-select"}
                 onClick={() => onSelectFiring(firing.id)}
               >
                 <strong>{firing.readableNumber}</strong>
@@ -4595,7 +4595,7 @@ function GlazesScreen({
       <aside className="kb-stack">
         {glaze ? (
           <>
-            <section className="kb-panel">
+            <section className="kb-panel kb-record-detail-panel">
               <div className="kb-section-title compact">
                 <h3>{glaze.name}</h3>
                 <VisibilityPill visibility={glaze.recipeVisibility} />
@@ -4626,7 +4626,7 @@ function GlazesScreen({
                 </div>
               )}
             </section>
-            <section className="kb-panel">
+            <section className="kb-panel kb-record-detail-panel">
               <div className="kb-section-title compact">
                 <h3>Recipe editor</h3>
                 <span>Historical versions</span>
@@ -4639,7 +4639,7 @@ function GlazesScreen({
                 </div>
               ))}
             </section>
-            <section className="kb-panel">
+            <section className="kb-panel kb-record-detail-panel">
               <div className="kb-section-title compact">
                 <h3>Connected results</h3>
                 <span>Automatic relationships</span>
@@ -4862,7 +4862,7 @@ function ClayBodiesScreen({
           ))}
         </div>
       </section>
-      <aside className="kb-panel">
+      <aside className="kb-panel kb-record-detail-panel">
         {clay ? (
           <>
             <div className="kb-section-title compact">
@@ -4879,7 +4879,7 @@ function ClayBodiesScreen({
               </div>
             </div>
             <h4>Glaze performance</h4>
-            {related.map((application) => {
+            {related.length > 0 ? related.map((application) => {
               const glaze = glazes.find((item) => item.id === application.glazeId);
               const firing = firings.find((item) => item.id === application.firingId);
               return (
@@ -4889,7 +4889,12 @@ function ClayBodiesScreen({
                   <small>{firing?.readableNumber}</small>
                 </div>
               );
-            })}
+            }) : (
+              <div className="kb-empty-inline">
+                <Layers3 size={18} aria-hidden="true" />
+                <span>No linked glaze results yet</span>
+              </div>
+            )}
           </>
         ) : (
           <div className="kb-empty-state">
@@ -4966,24 +4971,24 @@ function KilnsScreen({
         </div>
       </section>
       <aside className="kb-stack">
-        {selectedKiln ? [selectedKiln, ...kilns.filter((kiln) => kiln.id !== selectedKiln.id).slice(0, 1)].map((kiln) => (
-          <section className="kb-panel" key={kiln.id}>
+        {selectedKiln ? (
+          <section className="kb-panel kb-record-detail-panel" key={selectedKiln.id}>
             <div className="kb-section-title compact">
-              <h3>{kiln.name}</h3>
-              <span>{kiln.active ? "Active" : "Retired"}</span>
+              <h3>{selectedKiln.name}</h3>
+              <span>{selectedKiln.active ? "Active" : "Retired"}</span>
             </div>
             <div className="kb-spec-list">
-              <span>Controller <strong>{kiln.controllerType}</strong></span>
-              <span>Maximum <strong>{formatTemperature(kiln.maxTemperatureC, "c")}</strong></span>
-              <span>Location <strong>{kiln.defaultLocation.replaceAll("_", " ")}</strong></span>
-              <span>Firings <strong>{firings.filter((firing) => firing.kilnId === kiln.id).length}</strong></span>
+              <span>Controller <strong>{selectedKiln.controllerType}</strong></span>
+              <span>Maximum <strong>{formatTemperature(selectedKiln.maxTemperatureC, "c")}</strong></span>
+              <span>Location <strong>{selectedKiln.defaultLocation.replaceAll("_", " ")}</strong></span>
+              <span>Firings <strong>{firings.filter((firing) => firing.kilnId === selectedKiln.id).length}</strong></span>
             </div>
             <div className="kb-maintenance-row">
               <CheckCircle2 size={18} />
               <span>Thermocouple calibration recorded after latest cone check</span>
             </div>
           </section>
-        )) : (
+        ) : (
           <section className="kb-panel kb-empty-state">
             <Gauge size={22} aria-hidden="true" />
             <h3>No kilns yet</h3>
@@ -6818,9 +6823,11 @@ function LibraryCard({
   return (
     <article className="kb-library-card">
       <div className="kb-library-swatch" style={{ background: color }} />
-      <span>{eyebrow}</span>
-      <strong>{title}</strong>
-      <small>{detail}</small>
+      <div className="kb-library-card-copy">
+        <span>{eyebrow}</span>
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </div>
     </article>
   );
 }
