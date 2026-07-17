@@ -99,6 +99,8 @@ test("brand system is documented and wired into the app", async () => {
   assert.match(layout, /family=Inter/);
   assert.match(workspace, /BRAND_ASSETS/);
   assert.match(workspace, /BRAND_CHART_COLORS/);
+  assert.match(workspace, /className="kb-brand-mark" src=\{BRAND_ASSETS\.logo\}/);
+  assert.doesNotMatch(workspace, /kb-header-logo/);
   assert.match(brandConstants, /BRAND_PROFILE_COLORS/);
 });
 

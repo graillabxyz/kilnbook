@@ -348,16 +348,11 @@ button:disabled {
   min-width: 0;
 }
 
-.kb-header-logo,
 .kb-logo-heading > img {
   width: 2.5rem;
   height: 2.5rem;
   object-fit: contain;
   flex: 0 0 auto;
-}
-
-.kb-header-logo {
-  margin-top: 1.52rem;
 }
 
 .kb-title-text .kb-kicker {
@@ -500,7 +495,7 @@ button:disabled {
 }
 
 .kb-create-dialog {
-  width: min(64rem, 100%);
+  width: min(58rem, 100%);
   max-height: min(92vh, 58rem);
   overflow: auto;
   border: 1px solid var(--kb-line);
@@ -522,6 +517,27 @@ button:disabled {
 .kb-form-actions {
   justify-content: flex-end;
   margin-top: 0.15rem;
+}
+
+.kb-dialog-toolbar.modern {
+  align-items: flex-end;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: var(--kb-warm-panel);
+  padding: 0.75rem;
+}
+
+.kb-dialog-toolbar.modern .kb-kicker {
+  margin-bottom: 0.36rem;
+}
+
+.kb-dialog-status {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+  color: var(--kb-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .kb-add-option-grid,
@@ -2262,6 +2278,45 @@ button:disabled {
   gap: 0.75rem;
 }
 
+.kb-form-section {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid var(--kb-line);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.72);
+  padding: 0.9rem;
+}
+
+.kb-form-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.68rem;
+  border-bottom: 1px solid rgba(217, 204, 188, 0.72);
+}
+
+.kb-form-section-head h3 {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 1.28rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.kb-form-section-head p:not(.kb-kicker) {
+  max-width: 42rem;
+  margin: 0.35rem 0 0;
+  color: var(--kb-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.kb-form-section-body {
+  display: grid;
+  gap: 0.7rem;
+}
+
 .kb-form label {
   display: grid;
   gap: 0.3rem;
@@ -2294,6 +2349,32 @@ button:disabled {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.kb-form-section .kb-recipe-builder {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.kb-total-pill {
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(163, 67, 36, 0.26);
+  border-radius: 999px;
+  background: var(--kb-terracotta-soft);
+  color: #78351f;
+  padding: 0 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.kb-total-pill.balanced {
+  border-color: rgba(101, 123, 84, 0.3);
+  background: #e8efdf;
+  color: #405536;
+}
+
 .kb-recipe-builder,
 .kb-catalog-panel,
 .kb-empty-state {
@@ -2317,6 +2398,16 @@ button:disabled {
   grid-template-columns: minmax(10rem, 1fr) minmax(5.5rem, 0.34fr) minmax(8rem, 0.42fr) auto;
   gap: 0.5rem;
   align-items: center;
+}
+
+.kb-ingredient-header {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(5.5rem, 0.34fr) minmax(8rem, 0.42fr) auto;
+  gap: 0.5rem;
+  color: var(--kb-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .kb-checkbox-grid {
@@ -2346,9 +2437,44 @@ button:disabled {
   accent-color: var(--kb-terracotta);
 }
 
+.kb-checkbox-row input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-height: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+}
+
 .kb-checkbox-row span {
   color: var(--kb-ink);
   font-size: 0.84rem;
+}
+
+.kb-checkbox-grid.option-cards {
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+}
+
+.kb-checkbox-row.option-card {
+  min-height: 3rem;
+  align-items: center;
+  background: rgba(255, 253, 249, 0.86);
+  font-weight: 600;
+}
+
+.kb-checkbox-row.option-card:has(input:checked) {
+  border-color: rgba(163, 67, 36, 0.42);
+  background: var(--kb-ivory);
+  box-shadow: inset 0 0 0 1px rgba(163, 67, 36, 0.12);
+}
+
+.kb-checkbox-row.option-card:has(input:checked) span {
+  color: var(--kb-terracotta);
+}
+
+.kb-quiet-button.full {
+  width: 100%;
+  justify-content: center;
 }
 
 .kb-swatch-picker {
@@ -3340,12 +3466,6 @@ button:disabled {
     width: min(12.8rem, 58vw);
   }
 
-  .kb-home-header .kb-header-logo {
-    width: 2.2rem;
-    height: 2.2rem;
-    margin-top: 0;
-  }
-
   .kb-header-actions {
     justify-content: flex-end;
     min-width: 0;
@@ -3549,10 +3669,31 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .kb-ingredient-header {
+    display: none;
+  }
+
   .kb-dialog-toolbar,
   .kb-form-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .kb-form-section {
+    padding: 0.82rem;
+  }
+
+  .kb-form-section-head {
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .kb-form-section-head h3 {
+    font-size: 1.18rem;
+  }
+
+  .kb-dialog-status {
+    justify-items: start;
   }
 
   .kb-form-actions .kb-primary-button,

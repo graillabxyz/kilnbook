@@ -40,7 +40,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import {
   Area,
@@ -286,6 +286,19 @@ const GLAZE_MARKETPLACE_FORMATS: GlazeMarketplacePreset[] = [
   { format: "wet_glaze", label: "Wet glaze" },
   { format: "sample_tile", label: "Sample tile" },
   { format: "consultation", label: "Consultation" },
+];
+const GLAZE_TYPE_OPTIONS = [
+  { value: "studio_recipe", label: "Studio recipe" },
+  { value: "commercial", label: "Commercial glaze" },
+  { value: "ash", label: "Ash glaze" },
+  { value: "celadon", label: "Celadon" },
+  { value: "tenmoku", label: "Tenmoku" },
+  { value: "shino", label: "Shino" },
+  { value: "matte", label: "Matte glaze" },
+  { value: "satin", label: "Satin glaze" },
+  { value: "clear", label: "Clear glaze" },
+  { value: "underglaze", label: "Underglaze" },
+  { value: "other", label: "Other" },
 ];
 const GLAZE_SUPPLIER_CATALOG: SupplierGlazeCatalogEntry[] = [
   {
@@ -1960,7 +1973,6 @@ function Header({
       ].filter(Boolean).join(" ")}
     >
       <div className="kb-title-lockup">
-        <Image className="kb-header-logo" src={BRAND_ASSETS.logo} alt="" width={40} height={40} />
         <div className="kb-title-text">
           <p className="kb-kicker">Workspace</p>
           {view === "Home" ? (
@@ -2456,6 +2468,34 @@ function VisibilitySelector({
         </button>
       ))}
     </div>
+  );
+}
+
+function FormSection({
+  kicker,
+  title,
+  description,
+  action,
+  children,
+}: {
+  kicker?: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="kb-form-section">
+      <div className="kb-form-section-head">
+        <div>
+          {kicker && <p className="kb-kicker">{kicker}</p>}
+          <h3>{title}</h3>
+          {description && <p>{description}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="kb-form-section-body">{children}</div>
+    </section>
   );
 }
 
@@ -5593,86 +5633,108 @@ function GlazeCreateDialog({
               <CircleX size={18} />
             </button>
           </div>
-          <div className="kb-dialog-toolbar">
-            <div className="kb-segmented">
-              <button
-                type="button"
-                className={mode === "recipe" ? "active" : ""}
-                onClick={() => setMode("recipe")}
-              >
-                Recipe
-              </button>
-              <button
-                type="button"
-                className={mode === "commercial" ? "active" : ""}
-                onClick={() => {
-                  setMode("commercial");
-                  applyCatalogEntry(catalogId);
-                }}
-              >
-                Commercial glaze
-              </button>
+          <div className="kb-dialog-toolbar modern">
+            <div>
+              <p className="kb-kicker">Start with</p>
+              <div className="kb-segmented">
+                <button
+                  type="button"
+                  className={mode === "recipe" ? "active" : ""}
+                  onClick={() => setMode("recipe")}
+                >
+                  Studio recipe
+                </button>
+                <button
+                  type="button"
+                  className={mode === "commercial" ? "active" : ""}
+                  onClick={() => {
+                    setMode("commercial");
+                    applyCatalogEntry(catalogId);
+                  }}
+                >
+                  Commercial glaze
+                </button>
+              </div>
             </div>
-            <VisibilityPill visibility={recipeVisibility} />
+            <div className="kb-dialog-status">
+              <span>Recipe visibility</span>
+              <VisibilityPill visibility={recipeVisibility} />
+            </div>
           </div>
-          {mode === "commercial" && (
-            <label>
-              <span>Supplier catalog starter</span>
-              <span className="kb-select-wrap">
-                <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
-                  {GLAZE_SUPPLIER_CATALOG.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.supplier} · {entry.productLine} · {entry.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-          )}
-          <div className="kb-form-grid">
-            <label>
-              <span>Glaze name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name this glaze" />
-            </label>
-            <label>
-              <span>{mode === "commercial" ? "Supplier" : "Source"}</span>
-              <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="Studio, AMACO, Mayco" />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Line or family</span>
-              <input value={productLine} onChange={(event) => setProductLine(event.target.value)} placeholder="Potter's Choice, studio archive" />
-            </label>
-            <label>
-              <span>Cone range</span>
-              <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} placeholder="5-6" />
-            </label>
-            <label>
-              <span>Surface</span>
-              <input value={surface} onChange={(event) => setSurface(event.target.value)} placeholder="satin blue, glossy iron" />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Type</span>
-              <input value={glazeType} onChange={(event) => setGlazeType(event.target.value)} placeholder="ash, celadon, commercial" />
-            </label>
-            <label>
-              <span>Color family</span>
-              <input value={colorText} onChange={(event) => setColorText(event.target.value)} placeholder="blue, cream, brown" />
-            </label>
-            <label>
-              <span>Opacity</span>
-              <input value={opacity} onChange={(event) => setOpacity(event.target.value)} placeholder="opaque, translucent" />
-            </label>
-          </div>
-          <label>
-            <span>Atmosphere compatibility</span>
-            <div className="kb-checkbox-grid">
+          <FormSection
+            kicker="Basics"
+            title="Name and classify the glaze"
+            description="Use the fields people recognize first: name, source, cone range, surface, and color family."
+          >
+            {mode === "commercial" && (
+              <label>
+                <span>Supplier catalog starter</span>
+                <span className="kb-select-wrap">
+                  <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
+                    {GLAZE_SUPPLIER_CATALOG.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.supplier} · {entry.productLine} · {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+            )}
+            <div className="kb-form-grid">
+              <label>
+                <span>Glaze name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name this glaze" />
+              </label>
+              <label>
+                <span>{mode === "commercial" ? "Supplier" : "Source"}</span>
+                <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="Studio, AMACO, Mayco" />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Line or family</span>
+                <input value={productLine} onChange={(event) => setProductLine(event.target.value)} placeholder="Potter's Choice, studio archive" />
+              </label>
+              <label>
+                <span>Cone range</span>
+                <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} placeholder="5-6" />
+              </label>
+              <label>
+                <span>Surface</span>
+                <input value={surface} onChange={(event) => setSurface(event.target.value)} placeholder="satin blue, glossy iron" />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Glaze type</span>
+                <span className="kb-select-wrap">
+                  <select value={glazeType} onChange={(event) => setGlazeType(event.target.value)}>
+                    {GLAZE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+              <label>
+                <span>Color family</span>
+                <input value={colorText} onChange={(event) => setColorText(event.target.value)} placeholder="blue, cream, brown" />
+              </label>
+              <label>
+                <span>Opacity</span>
+                <input value={opacity} onChange={(event) => setOpacity(event.target.value)} placeholder="opaque, translucent" />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection
+            kicker="Firing fit"
+            title="Where this glaze is expected to work"
+            description="Select the atmospheres you would reasonably test or recommend for this glaze."
+          >
+            <div className="kb-checkbox-grid option-cards">
               {ATMOSPHERE_OPTIONS.slice(0, 6).map((option) => (
-                <label className="kb-checkbox-row" key={option.value}>
+                <label className="kb-checkbox-row option-card" key={option.value}>
                   <input
                     type="checkbox"
                     name="atmosphere"
@@ -5683,225 +5745,261 @@ function GlazeCreateDialog({
                 </label>
               ))}
             </div>
-          </label>
+          </FormSection>
           {mode === "recipe" ? (
-            <div className="kb-recipe-builder">
-              <div className="kb-module-head">
-                <div>
-                  <p className="kb-kicker">Recipe</p>
-                  <strong>Initial ingredient version</strong>
+            <FormSection
+              kicker="Recipe"
+              title="Initial ingredient version"
+              description="Enter dry percentages. The total does not have to be perfect yet, but 100% is easiest to compare later."
+              action={
+                <span className={Math.abs(totalPercentage - 100) <= 0.1 ? "kb-total-pill balanced" : "kb-total-pill"}>
+                  {Math.round(totalPercentage * 10) / 10}% dry total
+                </span>
+              }
+            >
+              <div className="kb-recipe-builder">
+                <div className="kb-ingredient-header" aria-hidden="true">
+                  <span>Material</span>
+                  <span>Percent</span>
+                  <span>Role</span>
+                  <span />
                 </div>
-                <span>{Math.round(totalPercentage * 10) / 10}% dry total</span>
-              </div>
-              {ingredients.map((ingredient) => (
-                <div className="kb-ingredient-row" key={ingredient.id}>
-                  <input
-                    aria-label="Material name"
-                    value={ingredient.materialName}
-                    onChange={(event) => updateIngredient(ingredient.id, { materialName: event.target.value })}
-                    placeholder="Material"
-                  />
-                  <input
-                    aria-label="Percentage"
-                    type="number"
-                    inputMode="decimal"
-                    value={ingredient.percentage}
-                    onChange={(event) => updateIngredient(ingredient.id, { percentage: event.target.value })}
-                    placeholder="%"
-                  />
-                  <span className="kb-select-wrap">
-                    <select
-                      aria-label="Ingredient role"
-                      value={ingredient.role}
-                      onChange={(event) =>
-                        updateIngredient(ingredient.id, { role: event.target.value as RecipeIngredient["role"] })
-                      }
+                {ingredients.map((ingredient) => (
+                  <div className="kb-ingredient-row" key={ingredient.id}>
+                    <input
+                      aria-label="Material name"
+                      value={ingredient.materialName}
+                      onChange={(event) => updateIngredient(ingredient.id, { materialName: event.target.value })}
+                      placeholder="Material"
+                    />
+                    <input
+                      aria-label="Percentage"
+                      type="number"
+                      inputMode="decimal"
+                      value={ingredient.percentage}
+                      onChange={(event) => updateIngredient(ingredient.id, { percentage: event.target.value })}
+                      placeholder="%"
+                    />
+                    <span className="kb-select-wrap">
+                      <select
+                        aria-label="Ingredient role"
+                        value={ingredient.role}
+                        onChange={(event) =>
+                          updateIngredient(ingredient.id, { role: event.target.value as RecipeIngredient["role"] })
+                        }
+                      >
+                        <option value="base">Base</option>
+                        <option value="colorant">Colorant</option>
+                        <option value="additive">Additive</option>
+                      </select>
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </span>
+                    <button
+                      type="button"
+                      className="kb-icon-button mini"
+                      aria-label="Remove ingredient"
+                      onClick={() => setIngredients((items) => items.filter((item) => item.id !== ingredient.id))}
+                      disabled={ingredients.length === 1}
                     >
-                      <option value="base">Base</option>
-                      <option value="colorant">Colorant</option>
-                      <option value="additive">Additive</option>
-                    </select>
-                    <ChevronDown size={16} aria-hidden="true" />
-                  </span>
-                  <button
-                    type="button"
-                    className="kb-icon-button mini"
-                    aria-label="Remove ingredient"
-                    onClick={() => setIngredients((items) => items.filter((item) => item.id !== ingredient.id))}
-                    disabled={ingredients.length === 1}
-                  >
-                    <CircleX size={15} />
-                  </button>
-                </div>
-              ))}
-              <button type="button" className="kb-quiet-button" onClick={addIngredient}>
-                <Plus size={16} />
-                <span>Add ingredient</span>
-              </button>
-            </div>
-          ) : (
-            <div className="kb-catalog-panel">
-              <div className="kb-hero-swatch" style={{ background: heroImageColor }} />
-              <div>
-                <p className="kb-kicker">Imported profile</p>
-                <strong>{supplier} {productLine}</strong>
-                <span>Commercial formulas are tracked as product profiles. Results can still connect to firings, clay bodies, layers, photos, and notes.</span>
+                      <CircleX size={15} />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="kb-quiet-button full" onClick={addIngredient}>
+                  <Plus size={16} />
+                  <span>Add ingredient</span>
+                </button>
               </div>
-            </div>
+            </FormSection>
+          ) : (
+            <FormSection
+              kicker="Commercial profile"
+              title="Track bought glaze results without pretending you know the formula"
+              description="Commercial formulas are saved as product profiles. Results can still connect to firings, clay bodies, layers, photos, and notes."
+            >
+              <div className="kb-catalog-panel">
+                <div className="kb-hero-swatch" style={{ background: heroImageColor }} />
+                <div>
+                  <p className="kb-kicker">Imported profile</p>
+                  <strong>{supplier} {productLine}</strong>
+                  <span>Use this as a starting point, then attach your own firing and application results over time.</span>
+                </div>
+              </div>
+            </FormSection>
           )}
-          <div className="kb-form-grid">
-            <label>
-              <span>Description</span>
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What should future you know about this glaze?" />
-            </label>
-            <label>
-              <span>Application notes</span>
-              <textarea value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} placeholder="Coats, dipping time, specific gravity, layering notes" />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Firing range</span>
-              <input value={firingRange} onChange={(event) => setFiringRange(event.target.value)} placeholder="Cone 5-6" />
-            </label>
-            <label>
-              <span>Recipe visibility</span>
-              <span className="kb-select-wrap">
-                <select value={recipeVisibility} onChange={(event) => setRecipeVisibility(event.target.value as AddVisibility)}>
-                  <option value="public">Public</option>
-                  <option value="followers">Followers</option>
-                  <option value="private">Private</option>
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-            <label>
-              <span>Profile visibility</span>
-              <span className="kb-select-wrap">
-                <select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as AddVisibility)}>
-                  <option value="public">Public</option>
-                  <option value="followers">Followers</option>
-                  <option value="private">Private</option>
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-          </div>
-          <div className="kb-marketplace-builder">
-            <label className="kb-checkbox-row standalone">
+          <FormSection
+            kicker="Notes"
+            title="Describe what matters when you use it"
+            description="These notes help future result posts make sense without forcing every detail into the recipe."
+          >
+            <div className="kb-form-grid">
+              <label>
+                <span>Description</span>
+                <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What should future you know about this glaze?" />
+              </label>
+              <label>
+                <span>Application notes</span>
+                <textarea value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} placeholder="Coats, dipping time, specific gravity, layering notes" />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection
+            kicker="Sharing"
+            title="Choose what people can see"
+            description="The glaze profile and the recipe can have different visibility, so you can share results while keeping a formula private."
+          >
+            <div className="kb-form-grid three">
+              <label>
+                <span>Firing range</span>
+                <input value={firingRange} onChange={(event) => setFiringRange(event.target.value)} placeholder="Cone 5-6" />
+              </label>
+              <label>
+                <span>Recipe visibility</span>
+                <span className="kb-select-wrap">
+                  <select value={recipeVisibility} onChange={(event) => setRecipeVisibility(event.target.value as AddVisibility)}>
+                    <option value="public">Public</option>
+                    <option value="followers">Followers</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+              <label>
+                <span>Profile visibility</span>
+                <span className="kb-select-wrap">
+                  <select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as AddVisibility)}>
+                    <option value="public">Public</option>
+                    <option value="followers">Followers</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+            </div>
+          </FormSection>
+          <FormSection
+            kicker="Marketplace"
+            title="Optional selling details"
+            description="Use this only when the glaze should appear as something people can buy or request from your profile."
+          >
+            <div className="kb-marketplace-builder">
+              <label className="kb-checkbox-row standalone option-card">
               <input
                 type="checkbox"
                 checked={marketplaceEnabled}
                 onChange={(event) => setMarketplaceEnabled(event.target.checked)}
               />
               <span>List this glaze on the global marketplace</span>
-            </label>
-            {marketplaceEnabled && (
-              <>
-                <div className="kb-module-head">
-                  <div>
-                    <p className="kb-kicker">Marketplace</p>
-                    <strong>Sell from your public profile</strong>
+              </label>
+              {marketplaceEnabled && (
+                <>
+                  <div className="kb-module-head">
+                    <div>
+                      <p className="kb-kicker">Listing setup</p>
+                      <strong>Sell from your public profile</strong>
+                    </div>
+                    <span>{marketplaceShipsGlobally ? "Global shipping" : "Regional listing"}</span>
                   </div>
-                  <span>{marketplaceShipsGlobally ? "Global shipping" : "Regional listing"}</span>
-                </div>
-                <div className="kb-checkbox-grid">
-                  {GLAZE_MARKETPLACE_FORMATS.map((option) => (
-                    <label className="kb-checkbox-row" key={option.format}>
+                  <div className="kb-checkbox-grid option-cards">
+                    {GLAZE_MARKETPLACE_FORMATS.map((option) => (
+                      <label className="kb-checkbox-row option-card" key={option.format}>
+                        <input
+                          type="checkbox"
+                          name="marketplaceFormat"
+                          value={option.format}
+                          defaultChecked={option.format === "digital_recipe" || option.format === "dry_mix"}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="kb-form-grid three">
+                    <label>
+                      <span>Price label</span>
+                      <input
+                        value={marketplacePriceLabel}
+                        onChange={(event) => setMarketplacePriceLabel(event.target.value)}
+                        placeholder="$24 dry mix / $12 recipe"
+                      />
+                    </label>
+                    <label>
+                      <span>Shop URL</span>
+                      <input
+                        value={marketplaceShopUrl}
+                        onChange={(event) => setMarketplaceShopUrl(event.target.value)}
+                        placeholder="https://..."
+                      />
+                    </label>
+                    <label>
+                      <span>Inventory</span>
+                      <span className="kb-select-wrap">
+                        <select
+                          value={marketplaceInventoryStatus}
+                          onChange={(event) => setMarketplaceInventoryStatus(event.target.value as GlazeInventoryStatus)}
+                        >
+                          <option value="in_stock">In stock</option>
+                          <option value="made_to_order">Made to order</option>
+                          <option value="limited">Limited</option>
+                          <option value="sold_out">Sold out</option>
+                        </select>
+                        <ChevronDown size={16} aria-hidden="true" />
+                      </span>
+                    </label>
+                  </div>
+                  <div className="kb-form-grid">
+                    <label>
+                      <span>Ships from</span>
+                      <input
+                        value={marketplaceShipsFrom}
+                        onChange={(event) => setMarketplaceShipsFrom(event.target.value)}
+                        placeholder="Portland, OR"
+                      />
+                    </label>
+                    <label className="kb-checkbox-row standalone option-card">
                       <input
                         type="checkbox"
-                        name="marketplaceFormat"
-                        value={option.format}
-                        defaultChecked={option.format === "digital_recipe" || option.format === "dry_mix"}
+                        checked={marketplaceShipsGlobally}
+                        onChange={(event) => setMarketplaceShipsGlobally(event.target.checked)}
                       />
-                      <span>{option.label}</span>
+                      <span>Available globally</span>
                     </label>
-                  ))}
-                </div>
-                <div className="kb-form-grid three">
-                  <label>
-                    <span>Price label</span>
-                    <input
-                      value={marketplacePriceLabel}
-                      onChange={(event) => setMarketplacePriceLabel(event.target.value)}
-                      placeholder="$24 dry mix / $12 recipe"
-                    />
-                  </label>
-                  <label>
-                    <span>Shop URL</span>
-                    <input
-                      value={marketplaceShopUrl}
-                      onChange={(event) => setMarketplaceShopUrl(event.target.value)}
-                      placeholder="https://..."
-                    />
-                  </label>
-                  <label>
-                    <span>Inventory</span>
-                    <span className="kb-select-wrap">
-                      <select
-                        value={marketplaceInventoryStatus}
-                        onChange={(event) => setMarketplaceInventoryStatus(event.target.value as GlazeInventoryStatus)}
-                      >
-                        <option value="in_stock">In stock</option>
-                        <option value="made_to_order">Made to order</option>
-                        <option value="limited">Limited</option>
-                        <option value="sold_out">Sold out</option>
-                      </select>
-                      <ChevronDown size={16} aria-hidden="true" />
-                    </span>
-                  </label>
-                </div>
-                <div className="kb-form-grid">
-                  <label>
-                    <span>Ships from</span>
-                    <input
-                      value={marketplaceShipsFrom}
-                      onChange={(event) => setMarketplaceShipsFrom(event.target.value)}
-                      placeholder="Portland, OR"
-                    />
-                  </label>
-                  <label className="kb-checkbox-row standalone">
-                    <input
-                      type="checkbox"
-                      checked={marketplaceShipsGlobally}
-                      onChange={(event) => setMarketplaceShipsGlobally(event.target.checked)}
-                    />
-                    <span>Available globally</span>
-                  </label>
-                </div>
-                <div className="kb-form-grid">
-                  <label>
-                    <span>Fulfillment notes</span>
-                    <textarea
-                      value={marketplaceFulfillmentNotes}
-                      onChange={(event) => setMarketplaceFulfillmentNotes(event.target.value)}
-                      placeholder="Batch windows, shipping regions, lead times, pickup options"
-                    />
-                  </label>
-                  <label>
-                    <span>Safety disclosure</span>
-                    <textarea
-                      value={marketplaceSafetyDisclosure}
-                      onChange={(event) => setMarketplaceSafetyDisclosure(event.target.value)}
-                      placeholder="Food-safety status, handling notes, legal or shipping limitations"
-                    />
-                  </label>
-                </div>
-              </>
-            )}
-          </div>
-          <div className="kb-swatch-picker" aria-label="Profile swatch color">
-            {PROFILE_SWATCHES.map((color) => (
-              <button
-                type="button"
-                key={color}
-                className={heroImageColor === color ? "active" : ""}
-                style={{ background: color }}
-                aria-label={`Use swatch ${color}`}
-                onClick={() => setHeroImageColor(color)}
-              />
-            ))}
-          </div>
+                  </div>
+                  <div className="kb-form-grid">
+                    <label>
+                      <span>Fulfillment notes</span>
+                      <textarea
+                        value={marketplaceFulfillmentNotes}
+                        onChange={(event) => setMarketplaceFulfillmentNotes(event.target.value)}
+                        placeholder="Batch windows, shipping regions, lead times, pickup options"
+                      />
+                    </label>
+                    <label>
+                      <span>Safety disclosure</span>
+                      <textarea
+                        value={marketplaceSafetyDisclosure}
+                        onChange={(event) => setMarketplaceSafetyDisclosure(event.target.value)}
+                        placeholder="Food-safety status, handling notes, legal or shipping limitations"
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
+          </FormSection>
+          <FormSection kicker="Visual" title="Pick the glaze swatch color">
+            <div className="kb-swatch-picker" aria-label="Profile swatch color">
+              {PROFILE_SWATCHES.map((color) => (
+                <button
+                  type="button"
+                  key={color}
+                  className={heroImageColor === color ? "active" : ""}
+                  style={{ background: color }}
+                  aria-label={`Use swatch ${color}`}
+                  onClick={() => setHeroImageColor(color)}
+                />
+              ))}
+            </div>
+          </FormSection>
           <div className="kb-form-actions">
             <button type="button" className="kb-quiet-button" onClick={onClose}>
               Cancel
@@ -6002,96 +6100,116 @@ function ClayBodyCreateDialog({
               <CircleX size={18} />
             </button>
           </div>
-          <div className="kb-dialog-toolbar">
-            <div className="kb-segmented">
-              <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
-                Custom
-              </button>
-              <button
-                type="button"
-                className={mode === "commercial" ? "active" : ""}
-                onClick={() => {
-                  setMode("commercial");
-                  applyCatalogEntry(catalogId);
-                }}
-              >
-                Commercial body
-              </button>
+          <div className="kb-dialog-toolbar modern">
+            <div>
+              <p className="kb-kicker">Start with</p>
+              <div className="kb-segmented">
+                <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
+                  Studio body
+                </button>
+                <button
+                  type="button"
+                  className={mode === "commercial" ? "active" : ""}
+                  onClick={() => {
+                    setMode("commercial");
+                    applyCatalogEntry(catalogId);
+                  }}
+                >
+                  Commercial body
+                </button>
+              </div>
             </div>
-            <VisibilityPill visibility={profileVisibility} />
+            <div className="kb-dialog-status">
+              <span>Profile visibility</span>
+              <VisibilityPill visibility={profileVisibility} />
+            </div>
           </div>
-          {mode === "commercial" && (
-            <label>
-              <span>Clay catalog starter</span>
-              <span className="kb-select-wrap">
-                <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
-                  {CLAY_BODY_CATALOG.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.manufacturer} · {entry.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-          )}
-          <div className="kb-form-grid three">
-            <label>
-              <span>Clay body name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="B-Mix test body" />
-            </label>
-            <label>
-              <span>Manufacturer</span>
-              <input value={manufacturer} onChange={(event) => setManufacturer(event.target.value)} placeholder="Laguna, Standard, studio" />
-            </label>
-            <label>
-              <span>Supplier</span>
-              <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="Local supplier or studio" />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Body type</span>
-              <input value={bodyType} onChange={(event) => setBodyType(event.target.value)} placeholder="stoneware, porcelain" />
-            </label>
-            <label>
-              <span>Cone range</span>
-              <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} placeholder="5-6" />
-            </label>
-            <label>
-              <span>Texture</span>
-              <input value={texture} onChange={(event) => setTexture(event.target.value)} placeholder="smooth, grogged, speckled" />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Raw color</span>
-              <input value={rawColor} onChange={(event) => setRawColor(event.target.value)} />
-            </label>
-            <label>
-              <span>Fired color</span>
-              <input value={firedColor} onChange={(event) => setFiredColor(event.target.value)} />
-            </label>
-            <label>
-              <span>Grog %</span>
-              <input type="number" inputMode="decimal" value={grogPercentage} onChange={(event) => setGrogPercentage(event.target.value)} />
-            </label>
-          </div>
-          <div className="kb-form-grid">
-            <label>
-              <span>Absorption %</span>
-              <input type="number" inputMode="decimal" value={absorptionPercentage} onChange={(event) => setAbsorptionPercentage(event.target.value)} />
-            </label>
-            <label>
-              <span>Shrinkage %</span>
-              <input type="number" inputMode="decimal" value={shrinkagePercentage} onChange={(event) => setShrinkagePercentage(event.target.value)} />
-            </label>
-          </div>
-          <label>
-            <span>Atmosphere suitability</span>
-            <div className="kb-checkbox-grid">
+          <FormSection
+            kicker="Basics"
+            title="Name and source the clay body"
+            description="Keep the first fields close to how potters identify clay in conversation."
+          >
+            {mode === "commercial" && (
+              <label>
+                <span>Clay catalog starter</span>
+                <span className="kb-select-wrap">
+                  <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
+                    {CLAY_BODY_CATALOG.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.manufacturer} · {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+            )}
+            <div className="kb-form-grid three">
+              <label>
+                <span>Clay body name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="B-Mix test body" />
+              </label>
+              <label>
+                <span>Manufacturer</span>
+                <input value={manufacturer} onChange={(event) => setManufacturer(event.target.value)} placeholder="Laguna, Standard, studio" />
+              </label>
+              <label>
+                <span>Supplier</span>
+                <input value={supplier} onChange={(event) => setSupplier(event.target.value)} placeholder="Local supplier or studio" />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection
+            kicker="Properties"
+            title="How it behaves before and after firing"
+            description="Add only what you know now. These values become useful when comparing glaze fit later."
+          >
+            <div className="kb-form-grid three">
+              <label>
+                <span>Body type</span>
+                <input value={bodyType} onChange={(event) => setBodyType(event.target.value)} placeholder="stoneware, porcelain" />
+              </label>
+              <label>
+                <span>Cone range</span>
+                <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} placeholder="5-6" />
+              </label>
+              <label>
+                <span>Texture</span>
+                <input value={texture} onChange={(event) => setTexture(event.target.value)} placeholder="smooth, grogged, speckled" />
+              </label>
+            </div>
+            <div className="kb-form-grid three">
+              <label>
+                <span>Raw color</span>
+                <input value={rawColor} onChange={(event) => setRawColor(event.target.value)} />
+              </label>
+              <label>
+                <span>Fired color</span>
+                <input value={firedColor} onChange={(event) => setFiredColor(event.target.value)} />
+              </label>
+              <label>
+                <span>Grog %</span>
+                <input type="number" inputMode="decimal" value={grogPercentage} onChange={(event) => setGrogPercentage(event.target.value)} />
+              </label>
+            </div>
+            <div className="kb-form-grid">
+              <label>
+                <span>Absorption %</span>
+                <input type="number" inputMode="decimal" value={absorptionPercentage} onChange={(event) => setAbsorptionPercentage(event.target.value)} />
+              </label>
+              <label>
+                <span>Shrinkage %</span>
+                <input type="number" inputMode="decimal" value={shrinkagePercentage} onChange={(event) => setShrinkagePercentage(event.target.value)} />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection
+            kicker="Firing fit"
+            title="Atmospheres where this clay body is appropriate"
+          >
+            <div className="kb-checkbox-grid option-cards">
               {ATMOSPHERE_OPTIONS.slice(0, 6).map((option) => (
-                <label className="kb-checkbox-row" key={option.value}>
+                <label className="kb-checkbox-row option-card" key={option.value}>
                   <input
                     type="checkbox"
                     name="atmosphere"
@@ -6102,36 +6220,38 @@ function ClayBodyCreateDialog({
                 </label>
               ))}
             </div>
-          </label>
-          <label>
-            <span>Notes</span>
-            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Fit notes, reclaim blend, drying behavior, supplier batch details" />
-          </label>
-          <div className="kb-form-grid">
+          </FormSection>
+          <FormSection kicker="Notes and sharing" title="Save context for future glaze results">
             <label>
-              <span>Profile visibility</span>
-              <span className="kb-select-wrap">
-                <select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as AddVisibility)}>
-                  <option value="public">Public</option>
-                  <option value="followers">Followers</option>
-                  <option value="private">Private</option>
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
+              <span>Notes</span>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Fit notes, reclaim blend, drying behavior, supplier batch details" />
             </label>
-            <div className="kb-swatch-picker" aria-label="Clay swatch color">
-              {PROFILE_SWATCHES.map((color) => (
-                <button
-                  type="button"
-                  key={color}
-                  className={imageColor === color ? "active" : ""}
-                  style={{ background: color }}
-                  aria-label={`Use swatch ${color}`}
-                  onClick={() => setImageColor(color)}
-                />
-              ))}
+            <div className="kb-form-grid">
+              <label>
+                <span>Profile visibility</span>
+                <span className="kb-select-wrap">
+                  <select value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as AddVisibility)}>
+                    <option value="public">Public</option>
+                    <option value="followers">Followers</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+              <div className="kb-swatch-picker" aria-label="Clay swatch color">
+                {PROFILE_SWATCHES.map((color) => (
+                  <button
+                    type="button"
+                    key={color}
+                    className={imageColor === color ? "active" : ""}
+                    style={{ background: color }}
+                    aria-label={`Use swatch ${color}`}
+                    onClick={() => setImageColor(color)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          </FormSection>
           <div className="kb-form-actions">
             <button type="button" className="kb-quiet-button" onClick={onClose}>
               Cancel
@@ -6229,109 +6349,129 @@ function KilnCreateDialog({
               <CircleX size={18} />
             </button>
           </div>
-          <label>
-            <span>Kiln preset</span>
-            <span className="kb-select-wrap">
-              <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
-                <option value="">Custom kiln</option>
-                {KILN_CATALOG.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.manufacturer} · {entry.model}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} aria-hidden="true" />
-            </span>
-          </label>
-          <div className="kb-form-grid three">
+          <FormSection
+            kicker="Preset"
+            title="Start from a known kiln or create your own"
+            description="A preset only fills the form. You can adjust every value before saving."
+          >
             <label>
-              <span>Kiln name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="North room 1027" />
-            </label>
-            <label>
-              <span>Manufacturer</span>
-              <input value={manufacturer} onChange={(event) => setManufacturer(event.target.value)} placeholder="Skutt, L&L, Olympic, studio-built" />
-            </label>
-            <label>
-              <span>Model</span>
-              <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="KM-1027, custom downdraft" />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Kiln type</span>
+              <span>Kiln preset</span>
               <span className="kb-select-wrap">
-                <select value={kilnType} onChange={(event) => setKilnType(event.target.value as FiringType)}>
-                  {FIRING_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+                <select value={catalogId} onChange={(event) => applyCatalogEntry(event.target.value)}>
+                  <option value="">Custom kiln</option>
+                  {KILN_CATALOG.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.manufacturer} · {entry.model}
                     </option>
                   ))}
                 </select>
                 <ChevronDown size={16} aria-hidden="true" />
               </span>
             </label>
+          </FormSection>
+          <FormSection kicker="Identity" title="How you recognize this kiln">
+            <div className="kb-form-grid three">
+              <label>
+                <span>Kiln name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="North room 1027" />
+              </label>
+              <label>
+                <span>Manufacturer</span>
+                <input value={manufacturer} onChange={(event) => setManufacturer(event.target.value)} placeholder="Skutt, L&L, Olympic, studio-built" />
+              </label>
+              <label>
+                <span>Model</span>
+                <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="KM-1027, custom downdraft" />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection kicker="Firing setup" title="Fuel, atmosphere family, and controller">
+            <div className="kb-form-grid three">
+              <label>
+                <span>Kiln type</span>
+                <span className="kb-select-wrap">
+                  <select value={kilnType} onChange={(event) => setKilnType(event.target.value as FiringType)}>
+                    {FIRING_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+              <label>
+                <span>Fuel</span>
+                <input value={fuelType} onChange={(event) => setFuelType(event.target.value)} placeholder="electric, propane, natural gas, wood" />
+              </label>
+              <label>
+                <span>Controller</span>
+                <input value={controllerType} onChange={(event) => setControllerType(event.target.value)} placeholder="digital, manual, pyrometer" />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection kicker="Capacity" title="Useful limits for firing logs">
+            <div className="kb-form-grid three">
+              <label>
+                <span>Usable volume L</span>
+                <input type="number" inputMode="decimal" value={usableVolumeLiters} onChange={(event) => setUsableVolumeLiters(event.target.value)} />
+              </label>
+              <label>
+                <span>Max temp C</span>
+                <input type="number" inputMode="decimal" value={maxTemperatureC} onChange={(event) => setMaxTemperatureC(event.target.value)} />
+              </label>
+              <label>
+                <span>Cone range</span>
+                <input value={recommendedConeRange} onChange={(event) => setRecommendedConeRange(event.target.value)} />
+              </label>
+            </div>
+          </FormSection>
+          <FormSection
+            kicker="Location and sharing"
+            title="Where it usually fires"
+            description="Outdoor and covered-outdoor kilns can use weather readings when you start live tracking."
+          >
+            <div className="kb-form-grid three">
+              <label>
+                <span>Default location</span>
+                <span className="kb-select-wrap">
+                  <select value={defaultLocation} onChange={(event) => setDefaultLocation(event.target.value as KilnLocation)}>
+                    {KILN_LOCATION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+              <label>
+                <span>Power kW</span>
+                <input type="number" inputMode="decimal" value={powerKw} onChange={(event) => setPowerKw(event.target.value)} />
+              </label>
+              <label>
+                <span>Visibility</span>
+                <span className="kb-select-wrap">
+                  <select value={visibility} onChange={(event) => setVisibility(event.target.value as AddVisibility)}>
+                    <option value="public">Public</option>
+                    <option value="followers">Followers</option>
+                    <option value="private">Private</option>
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+            </div>
+          </FormSection>
+          <FormSection kicker="Notes" title="Maintenance and safety context">
             <label>
-              <span>Fuel</span>
-              <input value={fuelType} onChange={(event) => setFuelType(event.target.value)} placeholder="electric, propane, natural gas, wood" />
+              <span>Notes</span>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Elements, burners, venting, shelves, outdoor cover, calibration, maintenance" />
             </label>
-            <label>
-              <span>Controller</span>
-              <input value={controllerType} onChange={(event) => setControllerType(event.target.value)} placeholder="digital, manual, pyrometer" />
+            <label className="kb-checkbox-row standalone option-card">
+              <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
+              <span>Active kiln</span>
             </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Usable volume L</span>
-              <input type="number" inputMode="decimal" value={usableVolumeLiters} onChange={(event) => setUsableVolumeLiters(event.target.value)} />
-            </label>
-            <label>
-              <span>Max temp C</span>
-              <input type="number" inputMode="decimal" value={maxTemperatureC} onChange={(event) => setMaxTemperatureC(event.target.value)} />
-            </label>
-            <label>
-              <span>Cone range</span>
-              <input value={recommendedConeRange} onChange={(event) => setRecommendedConeRange(event.target.value)} />
-            </label>
-          </div>
-          <div className="kb-form-grid three">
-            <label>
-              <span>Default location</span>
-              <span className="kb-select-wrap">
-                <select value={defaultLocation} onChange={(event) => setDefaultLocation(event.target.value as KilnLocation)}>
-                  {KILN_LOCATION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-            <label>
-              <span>Power kW</span>
-              <input type="number" inputMode="decimal" value={powerKw} onChange={(event) => setPowerKw(event.target.value)} />
-            </label>
-            <label>
-              <span>Visibility</span>
-              <span className="kb-select-wrap">
-                <select value={visibility} onChange={(event) => setVisibility(event.target.value as AddVisibility)}>
-                  <option value="public">Public</option>
-                  <option value="followers">Followers</option>
-                  <option value="private">Private</option>
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-          </div>
-          <label>
-            <span>Notes</span>
-            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Elements, burners, venting, shelves, outdoor cover, calibration, maintenance" />
-          </label>
-          <label className="kb-checkbox-row standalone">
-            <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
-            <span>Active kiln</span>
-          </label>
+          </FormSection>
           <div className="kb-form-actions">
             <button type="button" className="kb-quiet-button" onClick={onClose}>
               Cancel
