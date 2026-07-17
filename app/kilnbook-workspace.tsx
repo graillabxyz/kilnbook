@@ -114,7 +114,7 @@ type AuthStatus =
   | { state: "signed-out"; message: string }
   | { state: "unconfigured"; message: string }
   | { state: "error"; message: string };
-type AddKind = "glaze_recipe" | "live_firing" | "previous_firing" | "glaze_result";
+type AddKind = "post" | "glaze_recipe" | "live_firing" | "previous_firing" | "glaze_result";
 type AddDraft = {
   id: string;
   kind: AddKind;
@@ -1247,6 +1247,19 @@ export function KilnbookWorkspace({
     setView(nextView === "Add" ? "Home" : nextView);
   };
 
+  const startAddFlow = (kind: AddKind, visibility: AddVisibility, createdAt = new Date().toISOString()) => {
+    setActiveAddFlow({ kind, visibility, startedAt: createdAt });
+    setAddChooserOpen(false);
+  };
+
+  const handleCreateAction = () => {
+    if (view === "Home" && !isMobileAppViewport()) {
+      startAddFlow("post", "public");
+      return;
+    }
+    setAddChooserOpen(true);
+  };
+
   const completeAddFlow = (desktopView: View) => {
     setActiveAddFlow(null);
     setView(isMobileAppViewport() ? "Profile" : desktopView);
@@ -1269,6 +1282,16 @@ export function KilnbookWorkspace({
       },
       ...items,
     ]);
+  };
+
+  const handlePublishPostDraft = (summary: { images: number; resultGroups: number }) => {
+    recordAddDraft(
+      "post",
+      activeAddFlow?.visibility ?? "public",
+      "Post draft",
+      `${summary.images} image${summary.images === 1 ? "" : "s"} and ${summary.resultGroups} result group${summary.resultGroups === 1 ? "" : "s"} staged for publishing.`,
+    );
+    completeAddFlow("Home");
   };
 
   const createInlineGlazeProfile = () => {
@@ -1681,7 +1704,7 @@ export function KilnbookWorkspace({
             authStatus={authStatus}
             query={query}
             onQueryChange={setQuery}
-            onCreate={() => setAddChooserOpen(true)}
+            onCreate={handleCreateAction}
             onOpenNotifications={() => navigateToView("Settings")}
             onOpenProfile={() => navigateToView("Profile")}
             onSearchSubmit={() => navigateToView("Explore")}
@@ -1705,24 +1728,23 @@ export function KilnbookWorkspace({
               onSaveGlazeRecipe={handleSaveGlazeRecipe}
               onSavePreviousFiring={handleSavePreviousFiring}
               onSaveGlazeResult={handleSaveGlazeResult}
+              onPublishPost={handlePublishPostDraft}
               onUpdateLiveFiringSetup={handleUpdateLiveFiringSetup}
               onFinishLiveFiring={handleFinishLiveFiring}
+              onCreateFiringRecord={createInlineFiringRecord}
+              onCreateGlazeProfile={createInlineGlazeProfile}
+              onCreateClayBodyProfile={createInlineClayBodyProfile}
+              onCreateKilnProfile={createInlineKilnProfile}
             />
           ) : view === "Home" ? (
             <HomeScreen
-              viewer={viewer}
               feedTab={feedTab}
               onFeedTabChange={setFeedTab}
               posts={feedTab === "Following" ? snapshot.posts : popularPosts}
               firings={firings}
               glazes={glazes}
               clayBodies={clayBodies}
-              kilns={kilns}
               onOpenExplore={() => navigateToView("Explore")}
-              onCreateFiringRecord={createInlineFiringRecord}
-              onCreateGlazeProfile={createInlineGlazeProfile}
-              onCreateClayBodyProfile={createInlineClayBodyProfile}
-              onCreateKilnProfile={createInlineKilnProfile}
             />
           ) : null}
           {!activeAddFlow && view === "Dashboard" && (
@@ -2027,7 +2049,7 @@ function AddChooser({
     visibility: AddVisibility,
   ) => void;
 }) {
-  const [kind, setKind] = useState<AddKind>("glaze_recipe");
+  const [kind, setKind] = useState<AddKind>("post");
   const [visibility, setVisibility] = useState<AddVisibility>("public");
   const addOptions: Array<{
     kind: AddKind;
@@ -2035,6 +2057,12 @@ function AddChooser({
     body: string;
     icon: LucideIcon;
   }> = [
+    {
+      kind: "post",
+      title: "Post",
+      body: "Share a result story with optional images, firings, glazes, clay bodies, and kiln context.",
+      icon: Send,
+    },
     {
       kind: "glaze_recipe",
       title: "Glaze recipe",
@@ -2094,8 +2122,8 @@ function AddChooser({
       >
         <div className="kb-section-title compact">
           <div>
-            <p className="kb-kicker">Add to profile</p>
-            <h2 id="add-dialog-title">What do you want to add?</h2>
+            <p className="kb-kicker">Create</p>
+            <h2 id="add-dialog-title">Choose what to add</h2>
           </div>
           <button type="button" className="kb-icon-button" aria-label="Close add chooser" onClick={onClose}>
             <CircleX size={18} />
@@ -2123,7 +2151,11 @@ function AddChooser({
               <button
                 type="button"
                 key={option.kind}
-                className={kind === option.kind ? "kb-add-option active" : "kb-add-option"}
+                className={[
+                  "kb-add-option",
+                  option.kind === "post" ? "primary" : "",
+                  kind === option.kind ? "active" : "",
+                ].filter(Boolean).join(" ")}
                 aria-pressed={kind === option.kind}
                 onClick={() => setKind(option.kind)}
               >
@@ -2137,7 +2169,7 @@ function AddChooser({
         <div className="kb-add-privacy">
           <div>
             <p className="kb-kicker">Visibility</p>
-            <h3>Choose how this appears on your profile</h3>
+            <h3>Choose who can see it</h3>
           </div>
           <div className="kb-add-visibility-grid">
             {visibilityOptions.map((option) => (
@@ -2191,8 +2223,13 @@ function AddFlowScreen({
   onSaveGlazeRecipe,
   onSavePreviousFiring,
   onSaveGlazeResult,
+  onPublishPost,
   onUpdateLiveFiringSetup,
   onFinishLiveFiring,
+  onCreateFiringRecord,
+  onCreateGlazeProfile,
+  onCreateClayBodyProfile,
+  onCreateKilnProfile,
 }: {
   flow: ActiveAddFlow;
   viewer: Profile;
@@ -2209,14 +2246,36 @@ function AddFlowScreen({
   onSaveGlazeRecipe: (payload: GlazeRecipePayload) => void;
   onSavePreviousFiring: (payload: PreviousFiringPayload) => void;
   onSaveGlazeResult: (payload: GlazeResultPayload) => void;
+  onPublishPost: (summary: { images: number; resultGroups: number }) => void;
   onUpdateLiveFiringSetup: (firingId: string, payload: LiveFiringSetupPayload) => void;
   onFinishLiveFiring: (firingId: string) => void;
+  onCreateFiringRecord: () => FiringRecord;
+  onCreateGlazeProfile: () => GlazeProfile;
+  onCreateClayBodyProfile: () => ClayBodyProfile;
+  onCreateKilnProfile: () => KilnProfile;
 }) {
   const shared = {
     flow,
     viewer,
     onBack,
   };
+
+  if (flow.kind === "post") {
+    return (
+      <PostAddFlow
+        {...shared}
+        firings={firings}
+        glazes={glazes}
+        clayBodies={clayBodies}
+        kilns={kilns}
+        onPublished={onPublishPost}
+        onCreateFiringRecord={onCreateFiringRecord}
+        onCreateGlazeProfile={onCreateGlazeProfile}
+        onCreateClayBodyProfile={onCreateClayBodyProfile}
+        onCreateKilnProfile={onCreateKilnProfile}
+      />
+    );
+  }
 
   if (flow.kind === "live_firing") {
     return (
@@ -2264,6 +2323,75 @@ function AddFlowScreen({
       glazes={glazes}
       onSave={onSaveGlazeRecipe}
     />
+  );
+}
+
+function PostAddFlow({
+  flow,
+  viewer,
+  firings,
+  glazes,
+  clayBodies,
+  kilns,
+  onBack,
+  onPublished,
+  onCreateFiringRecord,
+  onCreateGlazeProfile,
+  onCreateClayBodyProfile,
+  onCreateKilnProfile,
+}: {
+  flow: ActiveAddFlow;
+  viewer: Profile;
+  firings: FiringRecord[];
+  glazes: GlazeProfile[];
+  clayBodies: ClayBodyProfile[];
+  kilns: KilnProfile[];
+  onBack: () => void;
+  onPublished: (summary: { images: number; resultGroups: number }) => void;
+  onCreateFiringRecord: () => FiringRecord;
+  onCreateGlazeProfile: () => GlazeProfile;
+  onCreateClayBodyProfile: () => ClayBodyProfile;
+  onCreateKilnProfile: () => KilnProfile;
+}) {
+  return (
+    <div className="kb-add-flow kb-post-add-flow">
+      <AddFlowHero
+        icon={Send}
+        kicker="New post"
+        title="Share a firing result without turning the feed into a form."
+        body="Write the story, attach images, and link only the process records that help people understand the result."
+        onBack={onBack}
+      />
+      <div className="kb-flow-layout kb-post-flow-layout">
+        <section className="kb-panel kb-flow-card">
+          <PostComposer
+            viewer={viewer}
+            glazes={glazes}
+            clayBodies={clayBodies}
+            kilns={kilns}
+            firings={firings}
+            visibility={flow.visibility}
+            onPublished={onPublished}
+            onCreateFiringRecord={onCreateFiringRecord}
+            onCreateGlazeProfile={onCreateGlazeProfile}
+            onCreateClayBodyProfile={onCreateClayBodyProfile}
+            onCreateKilnProfile={onCreateKilnProfile}
+          />
+        </section>
+        <aside className="kb-panel kb-flow-sidebar">
+          <p className="kb-kicker">What gets shared</p>
+          <div className="kb-spec-list">
+            <span>Visibility <strong>{flow.visibility === "followers" ? "followers only" : flow.visibility}</strong></span>
+            <span>Records <strong>optional</strong></span>
+            <span>Images <strong>result groups</strong></span>
+            <span>Recipes <strong>share when ready</strong></span>
+          </div>
+          <p className="kb-safety-note">
+            A post can stay lightweight. Link exact firings, glazes, clay bodies, and kiln profiles only when they make the result easier to understand.
+          </p>
+        </aside>
+      </div>
+    </div>
   );
 }
 
@@ -3185,42 +3313,30 @@ function GlazeResultAddFlow({
 }
 
 function HomeScreen({
-  viewer,
   feedTab,
   onFeedTabChange,
   posts,
   firings,
   glazes,
   clayBodies,
-  kilns,
   onOpenExplore,
-  onCreateFiringRecord,
-  onCreateGlazeProfile,
-  onCreateClayBodyProfile,
-  onCreateKilnProfile,
 }: {
-  viewer: Profile;
   feedTab: "Following" | "Popular";
   onFeedTabChange: (tab: "Following" | "Popular") => void;
   posts: Post[];
   firings: FiringRecord[];
   glazes: GlazeProfile[];
   clayBodies: ClayBodyProfile[];
-  kilns: KilnProfile[];
   onOpenExplore: () => void;
-  onCreateFiringRecord: () => FiringRecord;
-  onCreateGlazeProfile: () => GlazeProfile;
-  onCreateClayBodyProfile: () => ClayBodyProfile;
-  onCreateKilnProfile: () => KilnProfile;
 }) {
   const firingById = useMemo(() => createRecordMap(firings), [firings]);
   const glazeById = useMemo(() => createRecordMap(glazes), [glazes]);
   const clayBodyById = useMemo(() => createRecordMap(clayBodies), [clayBodies]);
 
   return (
-    <div className="kb-grid-two kb-home-grid">
-      <section className="kb-panel kb-feed-panel">
-        <div className="kb-section-title">
+    <div className="kb-home-grid">
+      <section className="kb-feed-panel">
+        <div className="kb-feed-head">
           <div>
             <p className="kb-kicker">Home feed</p>
             <h2>Ceramic process from people you follow</h2>
@@ -3240,18 +3356,6 @@ function HomeScreen({
             ))}
           </div>
         </div>
-        <PostComposer
-          key={viewer.id}
-          viewer={viewer}
-          glazes={glazes}
-          clayBodies={clayBodies}
-          kilns={kilns}
-          firings={firings}
-          onCreateFiringRecord={onCreateFiringRecord}
-          onCreateGlazeProfile={onCreateGlazeProfile}
-          onCreateClayBodyProfile={onCreateClayBodyProfile}
-          onCreateKilnProfile={onCreateKilnProfile}
-        />
         <div className="kb-feed-list">
           {posts.length === 0 ? (
             <EmptyState
@@ -3311,6 +3415,8 @@ function PostComposer({
   clayBodies,
   kilns,
   firings,
+  visibility,
+  onPublished,
   onCreateFiringRecord,
   onCreateGlazeProfile,
   onCreateClayBodyProfile,
@@ -3321,6 +3427,8 @@ function PostComposer({
   clayBodies: ClayBodyProfile[];
   kilns: KilnProfile[];
   firings: FiringRecord[];
+  visibility: AddVisibility;
+  onPublished: (summary: { images: number; resultGroups: number }) => void;
   onCreateFiringRecord: () => FiringRecord;
   onCreateGlazeProfile: () => GlazeProfile;
   onCreateClayBodyProfile: () => ClayBodyProfile;
@@ -3566,6 +3674,7 @@ function PostComposer({
     setSelectedClayBodyIds([]);
     setSelectedKilnIds([]);
     setComposerImages([]);
+    onPublished({ images: composerImages.length, resultGroups: imageAnnotationCount });
   };
 
   return (
@@ -3584,9 +3693,9 @@ function PostComposer({
           <div className="kb-module-head">
             <div>
               <p className="kb-kicker" id="post-record-links">Post context</p>
-              <strong>Broad records for the whole post</strong>
+              <strong>Optional records connected to this post</strong>
             </div>
-            <VisibilityPill visibility="followers" />
+            <VisibilityPill visibility={visibility} />
           </div>
           <div className="kb-compose-controls compact">
             <label className="kb-select-field">

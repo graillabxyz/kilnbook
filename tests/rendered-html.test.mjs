@@ -111,6 +111,9 @@ test("mobile add and navigation follow the simplified Instagram-style order", as
 
   assert.match(product, /"Home",\n  "Explore",\n  "Add",\n  "Search",\n  "Profile"/);
   assert.match(workspace, /onConfirm\(option\.kind, "public"\)/);
+  assert.match(workspace, /kind: "post"/);
+  assert.match(workspace, /startAddFlow\("post", "public"\)/);
+  assert.match(workspace, /function PostAddFlow/);
   assert.match(workspace, /MOBILE_SCROLL_VIEWS = new Set<View>\(\["Home", "Explore", "Profile", "Settings", "Add"\]\)/);
   assert.match(workspace, /const items: MobileNavItem\[\] = \[\n    \{ label: "Home"/);
   assert.match(workspace, /\{ label: "Add", icon: Plus, action: "add" \},\n    \{ label: "Search"/);
@@ -210,9 +213,14 @@ test("post composer supports psychographic UX model and multi-result image annot
 
   const composerStart = workspace.indexOf("function PostComposer");
   const composerEnd = workspace.indexOf("function InlinePicker");
+  const homeStart = workspace.indexOf("function HomeScreen");
+  const homeEnd = workspace.indexOf("type ComposerImageDraft");
   assert.notEqual(composerStart, -1);
   assert.notEqual(composerEnd, -1);
+  assert.notEqual(homeStart, -1);
+  assert.notEqual(homeEnd, -1);
   const composer = workspace.slice(composerStart, composerEnd);
+  const homeScreen = workspace.slice(homeStart, homeEnd);
 
   assert.match(workspace, /type ComposerImageAnnotation/);
   assert.match(workspace, /annotations: ComposerImageAnnotation\[\]/);
@@ -221,7 +229,9 @@ test("post composer supports psychographic UX model and multi-result image annot
   assert.match(workspace, /New historic firing/);
   assert.match(workspace, /Unknown or unrecorded firing/);
   assert.match(workspace, /Post context/);
-  assert.match(workspace, /Broad records for the whole post/);
+  assert.match(workspace, /Optional records connected to this post/);
+  assert.match(homeScreen, /kb-feed-head/);
+  assert.doesNotMatch(homeScreen, /<PostComposer/);
   assert.doesNotMatch(workspace, /Each image can show different glazes/);
   assert.doesNotMatch(workspace, /Add profile/);
   assert.match(composer, /firings\.filter\(\(firing\) => firing\.ownerId === viewer\.id\)/);
