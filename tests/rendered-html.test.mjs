@@ -149,6 +149,12 @@ test("glaze, clay body, and kiln libraries use real creation flows", async () =>
   assert.match(workspace, /function GlazeCreateDialog/);
   assert.match(workspace, /function ClayBodyCreateDialog/);
   assert.match(workspace, /function KilnCreateDialog/);
+  assert.match(workspace, /function WizardProgress/);
+  assert.match(workspace, /function WizardStepPanel/);
+  assert.match(workspace, /function WizardActions/);
+  assert.match(workspace, /const glazeSteps: WizardStep\[\]/);
+  assert.match(workspace, /const claySteps: WizardStep\[\]/);
+  assert.match(workspace, /const kilnSteps: WizardStep\[\]/);
   assert.match(workspace, /kb-firing-select/);
   assert.match(workspace, /kb-record-detail-panel/);
   assert.match(workspace, /kb-library-card-copy/);
@@ -165,6 +171,10 @@ test("glaze, clay body, and kiln libraries use real creation flows", async () =>
   assert.doesNotMatch(workspace, /Untitled glaze|Untitled clay body|Untitled kiln/);
 
   assert.match(globals, /\.kb-create-dialog/);
+  assert.match(globals, /\.kb-wizard-progress/);
+  assert.match(globals, /\.kb-wizard-step\.active/);
+  assert.match(globals, /\.kb-wizard-panel\[hidden\]/);
+  assert.match(globals, /\.kb-wizard-actions/);
   assert.match(globals, /\.kb-ingredient-row/);
   assert.match(globals, /\.kb-swatch-picker/);
   assert.match(globals, /\.kb-library-select\.active/);

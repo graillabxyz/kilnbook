@@ -2488,6 +2488,90 @@ function FormSection({
   );
 }
 
+type WizardStep = {
+  id: string;
+  label: string;
+};
+
+function WizardProgress({
+  steps,
+  activeIndex,
+  onStepChange,
+}: {
+  steps: WizardStep[];
+  activeIndex: number;
+  onStepChange: (index: number) => void;
+}) {
+  return (
+    <nav className="kb-wizard-progress" aria-label="Creation steps">
+      {steps.map((step, index) => {
+        const isActive = index === activeIndex;
+        const isComplete = index < activeIndex;
+        return (
+          <button
+            type="button"
+            key={step.id}
+            className={["kb-wizard-step", isActive ? "active" : "", isComplete ? "complete" : ""]
+              .filter(Boolean)
+              .join(" ")}
+            aria-current={isActive ? "step" : undefined}
+            onClick={() => onStepChange(index)}
+          >
+            <span>{isComplete ? <CheckCircle2 size={14} aria-hidden="true" /> : index + 1}</span>
+            <strong>{step.label}</strong>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function WizardStepPanel({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <div className="kb-wizard-panel" hidden={!active}>
+      {children}
+    </div>
+  );
+}
+
+function WizardActions({
+  canSave,
+  isFirstStep,
+  isFinalStep,
+  nextLabel = "Next",
+  submitLabel,
+  onBack,
+  onCancel,
+  onNext,
+}: {
+  canSave: boolean;
+  isFirstStep: boolean;
+  isFinalStep: boolean;
+  nextLabel?: string;
+  submitLabel: string;
+  onBack: () => void;
+  onCancel: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="kb-form-actions kb-wizard-actions">
+      <button type="button" className="kb-quiet-button" onClick={isFirstStep ? onCancel : onBack}>
+        {isFirstStep ? "Cancel" : "Back"}
+      </button>
+      {isFinalStep ? (
+        <button type="submit" className="kb-primary-button" disabled={!canSave}>
+          <Save size={17} />
+          <span>{submitLabel}</span>
+        </button>
+      ) : (
+        <button type="button" className="kb-primary-button" onClick={onNext}>
+          <span>{nextLabel}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 function GlazeRecipeAddFlow({
   flow,
   viewer,
@@ -5461,6 +5545,7 @@ function GlazeCreateDialog({
 }) {
   const firstCatalog = GLAZE_SUPPLIER_CATALOG[0];
   const [mode, setMode] = useState<"recipe" | "commercial">("recipe");
+  const [stepIndex, setStepIndex] = useState(0);
   const [catalogId, setCatalogId] = useState(firstCatalog.id);
   const [name, setName] = useState("");
   const [supplier, setSupplier] = useState("Studio");
@@ -5499,6 +5584,17 @@ function GlazeCreateDialog({
     .filter((ingredient) => ingredient.materialName && Number.isFinite(ingredient.percentageValue));
   const totalPercentage = parsedIngredients.reduce((sum, ingredient) => sum + ingredient.percentageValue, 0);
   const canSave = name.trim().length >= 2 && (mode === "commercial" || parsedIngredients.length > 0);
+  const glazeSteps: WizardStep[] = [
+    { id: "basics", label: "Basics" },
+    { id: "fit", label: "Fit" },
+    { id: mode === "recipe" ? "recipe" : "product", label: mode === "recipe" ? "Recipe" : "Product" },
+    { id: "notes", label: "Notes" },
+    { id: "share", label: "Share" },
+  ];
+  const activeStep = Math.min(stepIndex, glazeSteps.length - 1);
+  const isFinalStep = activeStep === glazeSteps.length - 1;
+  const goBack = () => setStepIndex((current) => Math.max(0, current - 1));
+  const goNext = () => setStepIndex((current) => Math.min(glazeSteps.length - 1, current + 1));
 
   const applyCatalogEntry = (entryId: string) => {
     const entry = GLAZE_SUPPLIER_CATALOG.find((item) => item.id === entryId) ?? firstCatalog;
@@ -5629,7 +5725,10 @@ function GlazeCreateDialog({
                 <button
                   type="button"
                   className={mode === "recipe" ? "active" : ""}
-                  onClick={() => setMode("recipe")}
+                  onClick={() => {
+                    setMode("recipe");
+                    setStepIndex(0);
+                  }}
                 >
                   Studio recipe
                 </button>
@@ -5638,6 +5737,7 @@ function GlazeCreateDialog({
                   className={mode === "commercial" ? "active" : ""}
                   onClick={() => {
                     setMode("commercial");
+                    setStepIndex(0);
                     applyCatalogEntry(catalogId);
                   }}
                 >
@@ -5650,6 +5750,8 @@ function GlazeCreateDialog({
               <VisibilityPill visibility={recipeVisibility} />
             </div>
           </div>
+          <WizardProgress steps={glazeSteps} activeIndex={activeStep} onStepChange={setStepIndex} />
+          <WizardStepPanel active={activeStep === 0}>
           <FormSection
             kicker="Basics"
             title="Name and classify the glaze"
@@ -5716,6 +5818,8 @@ function GlazeCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 1}>
           <FormSection
             kicker="Firing fit"
             title="Where this glaze is expected to work"
@@ -5735,6 +5839,8 @@ function GlazeCreateDialog({
               ))}
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 2}>
           {mode === "recipe" ? (
             <FormSection
               kicker="Recipe"
@@ -5816,6 +5922,8 @@ function GlazeCreateDialog({
               </div>
             </FormSection>
           )}
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 3}>
           <FormSection
             kicker="Notes"
             title="Describe what matters when you use it"
@@ -5832,6 +5940,8 @@ function GlazeCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 4}>
           <FormSection
             kicker="Sharing"
             title="Choose what people can see"
@@ -5989,15 +6099,16 @@ function GlazeCreateDialog({
               ))}
             </div>
           </FormSection>
-          <div className="kb-form-actions">
-            <button type="button" className="kb-quiet-button" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="kb-primary-button" disabled={!canSave}>
-              <Save size={17} />
-              <span>{mode === "commercial" ? "Add commercial glaze" : "Save glaze recipe"}</span>
-            </button>
-          </div>
+          </WizardStepPanel>
+          <WizardActions
+            canSave={canSave}
+            isFirstStep={activeStep === 0}
+            isFinalStep={isFinalStep}
+            submitLabel={mode === "commercial" ? "Add commercial glaze" : "Save glaze recipe"}
+            onBack={goBack}
+            onCancel={onClose}
+            onNext={goNext}
+          />
         </form>
       </section>
     </div>
@@ -6015,6 +6126,7 @@ function ClayBodyCreateDialog({
 }) {
   const firstCatalog = CLAY_BODY_CATALOG[0];
   const [mode, setMode] = useState<"custom" | "commercial">("custom");
+  const [stepIndex, setStepIndex] = useState(0);
   const [catalogId, setCatalogId] = useState(firstCatalog.id);
   const [name, setName] = useState("");
   const [manufacturer, setManufacturer] = useState("");
@@ -6031,6 +6143,16 @@ function ClayBodyCreateDialog({
   const [imageColor, setImageColor] = useState<string>(BRAND_COLORS.stone);
   const [profileVisibility, setProfileVisibility] = useState<AddVisibility>("public");
   const canSave = name.trim().length >= 2;
+  const claySteps: WizardStep[] = [
+    { id: "basics", label: "Basics" },
+    { id: "properties", label: "Properties" },
+    { id: "fit", label: "Fit" },
+    { id: "share", label: "Share" },
+  ];
+  const activeStep = Math.min(stepIndex, claySteps.length - 1);
+  const isFinalStep = activeStep === claySteps.length - 1;
+  const goBack = () => setStepIndex((current) => Math.max(0, current - 1));
+  const goNext = () => setStepIndex((current) => Math.min(claySteps.length - 1, current + 1));
 
   const applyCatalogEntry = (entryId: string) => {
     const entry = CLAY_BODY_CATALOG.find((item) => item.id === entryId) ?? firstCatalog;
@@ -6093,7 +6215,14 @@ function ClayBodyCreateDialog({
             <div>
               <p className="kb-kicker">Start with</p>
               <div className="kb-segmented">
-                <button type="button" className={mode === "custom" ? "active" : ""} onClick={() => setMode("custom")}>
+                <button
+                  type="button"
+                  className={mode === "custom" ? "active" : ""}
+                  onClick={() => {
+                    setMode("custom");
+                    setStepIndex(0);
+                  }}
+                >
                   Studio body
                 </button>
                 <button
@@ -6101,6 +6230,7 @@ function ClayBodyCreateDialog({
                   className={mode === "commercial" ? "active" : ""}
                   onClick={() => {
                     setMode("commercial");
+                    setStepIndex(0);
                     applyCatalogEntry(catalogId);
                   }}
                 >
@@ -6113,6 +6243,8 @@ function ClayBodyCreateDialog({
               <VisibilityPill visibility={profileVisibility} />
             </div>
           </div>
+          <WizardProgress steps={claySteps} activeIndex={activeStep} onStepChange={setStepIndex} />
+          <WizardStepPanel active={activeStep === 0}>
           <FormSection
             kicker="Basics"
             title="Name and source the clay body"
@@ -6148,6 +6280,8 @@ function ClayBodyCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 1}>
           <FormSection
             kicker="Properties"
             title="How it behaves before and after firing"
@@ -6192,6 +6326,8 @@ function ClayBodyCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 2}>
           <FormSection
             kicker="Firing fit"
             title="Atmospheres where this clay body is appropriate"
@@ -6210,6 +6346,8 @@ function ClayBodyCreateDialog({
               ))}
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 3}>
           <FormSection kicker="Notes and sharing" title="Save context for future glaze results">
             <label>
               <span>Notes</span>
@@ -6241,15 +6379,16 @@ function ClayBodyCreateDialog({
               </div>
             </div>
           </FormSection>
-          <div className="kb-form-actions">
-            <button type="button" className="kb-quiet-button" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="kb-primary-button" disabled={!canSave}>
-              <Save size={17} />
-              <span>Save clay body</span>
-            </button>
-          </div>
+          </WizardStepPanel>
+          <WizardActions
+            canSave={canSave}
+            isFirstStep={activeStep === 0}
+            isFinalStep={isFinalStep}
+            submitLabel="Save clay body"
+            onBack={goBack}
+            onCancel={onClose}
+            onNext={goNext}
+          />
         </form>
       </section>
     </div>
@@ -6266,6 +6405,7 @@ function KilnCreateDialog({
   onCreate: (profile: KilnProfile) => void;
 }) {
   const firstCatalog = KILN_CATALOG[0];
+  const [stepIndex, setStepIndex] = useState(0);
   const [catalogId, setCatalogId] = useState("");
   const [name, setName] = useState("");
   const [manufacturer, setManufacturer] = useState("");
@@ -6282,6 +6422,18 @@ function KilnCreateDialog({
   const [active, setActive] = useState(true);
   const [notes, setNotes] = useState("");
   const canSave = name.trim().length >= 2;
+  const kilnSteps: WizardStep[] = [
+    { id: "preset", label: "Preset" },
+    { id: "identity", label: "Identity" },
+    { id: "setup", label: "Setup" },
+    { id: "capacity", label: "Capacity" },
+    { id: "location", label: "Location" },
+    { id: "notes", label: "Notes" },
+  ];
+  const activeStep = Math.min(stepIndex, kilnSteps.length - 1);
+  const isFinalStep = activeStep === kilnSteps.length - 1;
+  const goBack = () => setStepIndex((current) => Math.max(0, current - 1));
+  const goNext = () => setStepIndex((current) => Math.min(kilnSteps.length - 1, current + 1));
 
   const applyCatalogEntry = (entryId: string) => {
     setCatalogId(entryId);
@@ -6338,6 +6490,8 @@ function KilnCreateDialog({
               <CircleX size={18} />
             </button>
           </div>
+          <WizardProgress steps={kilnSteps} activeIndex={activeStep} onStepChange={setStepIndex} />
+          <WizardStepPanel active={activeStep === 0}>
           <FormSection
             kicker="Preset"
             title="Start from a known kiln or create your own"
@@ -6358,6 +6512,8 @@ function KilnCreateDialog({
               </span>
             </label>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 1}>
           <FormSection kicker="Identity" title="How you recognize this kiln">
             <div className="kb-form-grid three">
               <label>
@@ -6374,6 +6530,8 @@ function KilnCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 2}>
           <FormSection kicker="Firing setup" title="Fuel, atmosphere family, and controller">
             <div className="kb-form-grid three">
               <label>
@@ -6399,6 +6557,8 @@ function KilnCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 3}>
           <FormSection kicker="Capacity" title="Useful limits for firing logs">
             <div className="kb-form-grid three">
               <label>
@@ -6415,6 +6575,8 @@ function KilnCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 4}>
           <FormSection
             kicker="Location and sharing"
             title="Where it usually fires"
@@ -6451,6 +6613,8 @@ function KilnCreateDialog({
               </label>
             </div>
           </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeStep === 5}>
           <FormSection kicker="Notes" title="Maintenance and safety context">
             <label>
               <span>Notes</span>
@@ -6461,15 +6625,16 @@ function KilnCreateDialog({
               <span>Active kiln</span>
             </label>
           </FormSection>
-          <div className="kb-form-actions">
-            <button type="button" className="kb-quiet-button" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="kb-primary-button" disabled={!canSave}>
-              <Save size={17} />
-              <span>Save kiln</span>
-            </button>
-          </div>
+          </WizardStepPanel>
+          <WizardActions
+            canSave={canSave}
+            isFirstStep={activeStep === 0}
+            isFinalStep={isFinalStep}
+            submitLabel="Save kiln"
+            onBack={goBack}
+            onCancel={onClose}
+            onNext={goNext}
+          />
         </form>
       </section>
     </div>
