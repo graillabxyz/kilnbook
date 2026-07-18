@@ -115,7 +115,15 @@ test("mobile add and navigation follow the simplified Instagram-style order", as
   assert.match(product, /"Home",\n  "Explore",\n  "Add",\n  "Search",\n  "Profile"/);
   assert.match(workspace, /onConfirm\(option\.kind, "public"\)/);
   assert.match(workspace, /kind: "post"/);
-  assert.match(workspace, /startAddFlow\("post", "public"\)/);
+  assert.match(workspace, /const handleCreateAction = \(\) => \{\n    setAddChooserOpen\(true\);\n  \};/);
+  assert.match(workspace, /function AuthDialog/);
+  assert.match(workspace, /setAuthModalOpen\(true\)/);
+  assert.match(workspace, /Continue with Google/);
+  assert.match(workspace, /WizardProgress steps=\{postSteps\}/);
+  assert.match(workspace, /WizardProgress steps=\{liveSteps\}/);
+  assert.match(workspace, /WizardProgress steps=\{previousSteps\}/);
+  assert.match(workspace, /WizardProgress steps=\{resultSteps\}/);
+  assert.match(workspace, /WizardProgress steps=\{recipeSteps\}/);
   assert.match(workspace, /function PostAddFlow/);
   assert.match(workspace, /const showSearch = view === "Explore" && !isAddView/);
   assert.match(workspace, /hidden=\{!showSearch\}/);
@@ -135,6 +143,8 @@ test("mobile add and navigation follow the simplified Instagram-style order", as
   assert.match(globals, /overflow: hidden/);
   assert.match(globals, /\.kb-mobile-nav button\.compose svg/);
   assert.match(globals, /\.kb-add-mobile-list/);
+  assert.match(globals, /\.kb-auth-dialog/);
+  assert.match(globals, /-webkit-backdrop-filter: blur\(18px\) saturate\(0\.92\)/);
 });
 
 test("glaze, clay body, and kiln libraries use real creation flows", async () => {

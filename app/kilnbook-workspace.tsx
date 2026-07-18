@@ -898,6 +898,7 @@ export function KilnbookWorkspace({
   const [imageTags, setImageTags] = useState(snapshot.images[1]?.glazeIds ?? []);
   const [query, setQuery] = useState("");
   const [addChooserOpen, setAddChooserOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [addDrafts, setAddDrafts] = useState<AddDraft[]>([]);
   const [activeAddFlow, setActiveAddFlow] = useState<ActiveAddFlow | null>(null);
   const workspaceKilns = useMemo(
@@ -975,6 +976,7 @@ export function KilnbookWorkspace({
         if (error) throw error;
         if (data.session?.user) {
           setViewer(profileFromSupabaseUser(data.session.user, profileForUser(data.session.user.id)));
+          setAuthModalOpen(false);
           setAuthStatus({
             state: "signed-in",
             message: "Signed in with Supabase Auth.",
@@ -1000,6 +1002,7 @@ export function KilnbookWorkspace({
       if (!active) return;
       if (session?.user) {
         setViewer(profileFromSupabaseUser(session.user, profileForUser(session.user.id)));
+        setAuthModalOpen(false);
         setAuthStatus({
           state: "signed-in",
           message: "Signed in with Supabase Auth.",
@@ -1262,16 +1265,7 @@ export function KilnbookWorkspace({
     setView(nextView === "Add" ? "Home" : nextView);
   };
 
-  const startAddFlow = (kind: AddKind, visibility: AddVisibility, createdAt = new Date().toISOString()) => {
-    setActiveAddFlow({ kind, visibility, startedAt: createdAt });
-    setAddChooserOpen(false);
-  };
-
   const handleCreateAction = () => {
-    if (view === "Home" && !isMobileAppViewport()) {
-      startAddFlow("post", "public");
-      return;
-    }
     setAddChooserOpen(true);
   };
 
@@ -1631,7 +1625,9 @@ export function KilnbookWorkspace({
       "previous_firing",
       payload.visibility,
       firing.title,
-      `Backfilled ${firing.readableNumber} with ${payload.glazeId} and ${payload.clayBodyId}.`,
+      payload.glazeId || payload.clayBodyId
+        ? `Backfilled ${firing.readableNumber} with optional glaze and clay links.`
+        : `Backfilled ${firing.readableNumber} as a standalone historical firing.`,
     );
     completeAddFlow("Firings");
   };
@@ -1723,7 +1719,7 @@ export function KilnbookWorkspace({
             onOpenNotifications={() => navigateToView("Settings")}
             onOpenProfile={() => navigateToView("Profile")}
             onSearchSubmit={() => navigateToView("Explore")}
-            onGoogleSignIn={handleGoogleSignIn}
+            onOpenAuth={() => setAuthModalOpen(true)}
             onSignOut={handleSignOut}
           />
           {activeAddFlow ? (
@@ -1852,14 +1848,14 @@ export function KilnbookWorkspace({
               posts={workspacePosts}
               drafts={addDrafts}
               onOpenSettings={() => setView("Settings")}
-              onGoogleSignIn={handleGoogleSignIn}
+              onOpenAuth={() => setAuthModalOpen(true)}
             />
           )}
           {!activeAddFlow && view === "Settings" && (
             <SettingsScreen
               viewer={viewer}
               authStatus={authStatus}
-              onGoogleSignIn={handleGoogleSignIn}
+              onOpenAuth={() => setAuthModalOpen(true)}
             />
           )}
           {!activeAddFlow && view === "Library" && (
@@ -1882,6 +1878,13 @@ export function KilnbookWorkspace({
         <AddChooser
           onClose={() => setAddChooserOpen(false)}
           onConfirm={handleAddChoice}
+        />
+      )}
+      {authModalOpen && (
+        <AuthDialog
+          authStatus={authStatus}
+          onClose={() => setAuthModalOpen(false)}
+          onGoogleSignIn={handleGoogleSignIn}
         />
       )}
     </main>
@@ -1945,7 +1948,7 @@ function Header({
   onOpenNotifications,
   onOpenProfile,
   onSearchSubmit,
-  onGoogleSignIn,
+  onOpenAuth,
   onSignOut,
 }: {
   viewerName: string;
@@ -1957,13 +1960,12 @@ function Header({
   onOpenNotifications: () => void;
   onOpenProfile: () => void;
   onSearchSubmit: () => void;
-  onGoogleSignIn: () => void;
+  onOpenAuth: () => void;
   onSignOut: () => void;
 }) {
   const isAddView = view === "Add";
   const connected = authStatus.state === "signed-in";
   const authBusy = authStatus.state === "loading";
-  const authDisabled = authBusy || authStatus.state === "unconfigured";
   const showSearch = view === "Explore" && !isAddView;
   const pageTitle = view === "Home" ? "Home" : view === "Library" ? "Library" : view;
   return (
@@ -2029,8 +2031,7 @@ function Header({
           <button
             type="button"
             className="kb-quiet-button"
-            onClick={onGoogleSignIn}
-            disabled={authDisabled}
+            onClick={onOpenAuth}
             title={authStatus.state === "unconfigured" || authStatus.state === "error" ? authStatus.message : undefined}
           >
             <Mail size={17} aria-hidden="true" />
@@ -2039,6 +2040,60 @@ function Header({
         )}
       </div>
     </header>
+  );
+}
+
+function AuthDialog({
+  authStatus,
+  onClose,
+  onGoogleSignIn,
+}: {
+  authStatus: AuthStatus;
+  onClose: () => void;
+  onGoogleSignIn: () => void;
+}) {
+  const disabled = authStatus.state === "loading" || authStatus.state === "unconfigured";
+  return (
+    <div className="kb-modal-backdrop" role="presentation">
+      <section
+        className="kb-auth-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-dialog-title"
+      >
+        <div className="kb-section-title compact">
+          <div>
+            <p className="kb-kicker">Sign in</p>
+            <h2 id="auth-dialog-title">Choose your sign-in method</h2>
+          </div>
+          <button type="button" className="kb-icon-button" aria-label="Close sign-in" onClick={onClose}>
+            <CircleX size={18} />
+          </button>
+        </div>
+        <p className="kb-auth-dialog-copy">
+          Connect an account to save private recipes, profile records, firing logs, messages, and settings.
+        </p>
+        <div className="kb-auth-provider-list" aria-label="Authentication providers">
+          <button
+            type="button"
+            className="kb-auth-provider-button"
+            onClick={onGoogleSignIn}
+            disabled={disabled}
+            title={authStatus.state === "unconfigured" || authStatus.state === "error" ? authStatus.message : undefined}
+          >
+            <Mail size={20} aria-hidden="true" />
+            <span>
+              <strong>Continue with Google</strong>
+              <small>Use your Google account with Supabase Auth.</small>
+            </span>
+          </button>
+        </div>
+        <div className="kb-auth-status" role={authStatus.state === "error" ? "alert" : "status"}>
+          <ShieldCheck size={16} aria-hidden="true" />
+          <span>{authStatus.message}</span>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -2053,7 +2108,6 @@ function AddChooser({
   ) => void;
 }) {
   const [kind, setKind] = useState<AddKind>("post");
-  const [visibility, setVisibility] = useState<AddVisibility>("public");
   const addOptions: Array<{
     kind: AddKind;
     title: string;
@@ -2089,27 +2143,6 @@ function AddChooser({
       title: "Glaze result",
       body: "Add finished images and connect the result to a firing, recipe, and clay body.",
       icon: Camera,
-    },
-  ];
-  const visibilityOptions: Array<{
-    visibility: AddVisibility;
-    title: string;
-    body: string;
-  }> = [
-    {
-      visibility: "public",
-      title: "Public",
-      body: "Default for sharing recipes and results with the ceramics community.",
-    },
-    {
-      visibility: "followers",
-      title: "Followers only",
-      body: "Visible on your profile to people who follow you.",
-    },
-    {
-      visibility: "private",
-      title: "Private",
-      body: "Only visible to you. Useful for experiments or recipes you are not ready to share.",
     },
   ];
   const selectedOption = addOptions.find((option) => option.kind === kind) ?? addOptions[0];
@@ -2169,38 +2202,17 @@ function AddChooser({
             );
           })}
         </div>
-        <div className="kb-add-privacy">
-          <div>
-            <p className="kb-kicker">Visibility</p>
-            <h3>Choose who can see it</h3>
-          </div>
-          <div className="kb-add-visibility-grid">
-            {visibilityOptions.map((option) => (
-              <button
-                type="button"
-                key={option.visibility}
-                className={visibility === option.visibility ? "active" : ""}
-                aria-pressed={visibility === option.visibility}
-                onClick={() => setVisibility(option.visibility)}
-              >
-                <strong>{option.title}</strong>
-                <span>{option.body}</span>
-              </button>
-            ))}
-          </div>
-        </div>
         <div className="kb-add-summary">
           <SelectedIcon size={18} />
           <span>
-            {selectedOption.title} will be saved to your profile as{" "}
-            <strong>{visibility === "followers" ? "followers only" : visibility}</strong>.
+            {selectedOption.title} starts public by default. You can change privacy inside the creation flow before saving.
           </span>
         </div>
         <div className="kb-add-actions">
           <button type="button" className="kb-quiet-button" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="kb-primary-button" onClick={() => onConfirm(kind, visibility)}>
+          <button type="button" className="kb-primary-button" onClick={() => onConfirm(kind, "public")}>
             <Plus size={18} />
             <span>Continue</span>
           </button>
@@ -2585,6 +2597,7 @@ function GlazeRecipeAddFlow({
   onBack: () => void;
   onSave: (payload: GlazeRecipePayload) => void;
 }) {
+  const [recipeStep, setRecipeStep] = useState(0);
   const [title, setTitle] = useState("New glaze recipe");
   const [coneRange, setConeRange] = useState(glazes[0]?.coneRange ?? "Cone 6");
   const [baseMaterial, setBaseMaterial] = useState("Custer Feldspar");
@@ -2592,6 +2605,13 @@ function GlazeRecipeAddFlow({
   const [notes, setNotes] = useState("");
   const [visibility, setVisibility] = useState<AddVisibility>(flow.visibility);
   const canSave = title.trim().length >= 3;
+  const recipeSteps: WizardStep[] = [
+    { id: "name", label: "Name" },
+    { id: "materials", label: "Materials" },
+    { id: "share", label: "Share" },
+  ];
+  const activeRecipeStep = Math.min(recipeStep, recipeSteps.length - 1);
+  const isFinalRecipeStep = activeRecipeStep === recipeSteps.length - 1;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2616,37 +2636,59 @@ function GlazeRecipeAddFlow({
       />
       <div className="kb-flow-layout">
         <form className="kb-panel kb-flow-card kb-form" onSubmit={submit}>
-          <label>
-            <span>Recipe name</span>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} />
-          </label>
-          <div className="kb-form-grid">
-            <label>
-              <span>Cone range</span>
-              <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} />
-            </label>
+          <WizardProgress steps={recipeSteps} activeIndex={activeRecipeStep} onStepChange={setRecipeStep} />
+          <WizardStepPanel active={activeRecipeStep === 0}>
+            <FormSection kicker="Recipe identity" title="Name the glaze and firing range">
+              <label>
+                <span>Recipe name</span>
+                <input value={title} onChange={(event) => setTitle(event.target.value)} />
+              </label>
+              <label>
+                <span>Cone range</span>
+                <input value={coneRange} onChange={(event) => setConeRange(event.target.value)} />
+              </label>
+            </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeRecipeStep === 1}>
+            <FormSection
+              kicker="Materials"
+              title="Add the main materials you know"
+              description="This fast flow starts a recipe record. More precise percentages can be added from the glaze profile later."
+            >
+              <div className="kb-form-grid">
             <label>
               <span>Base material</span>
               <input value={baseMaterial} onChange={(event) => setBaseMaterial(event.target.value)} />
             </label>
-          </div>
-          <label>
-            <span>Colorant or modifier</span>
-            <input value={accentMaterial} onChange={(event) => setAccentMaterial(event.target.value)} />
-          </label>
-          <label>
-            <span>Notes</span>
-            <textarea
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Specific gravity, sieve, application thickness, or firing notes"
-            />
-          </label>
-          <VisibilitySelector value={visibility} onChange={setVisibility} />
-          <button type="submit" className="kb-primary-button full" disabled={!canSave}>
-            <Save size={17} />
-            <span>Save glaze recipe</span>
-          </button>
+                <label>
+                  <span>Colorant or modifier</span>
+                  <input value={accentMaterial} onChange={(event) => setAccentMaterial(event.target.value)} />
+                </label>
+              </div>
+            </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeRecipeStep === 2}>
+            <FormSection kicker="Notes and sharing" title="Choose visibility and add context">
+              <label>
+                <span>Notes</span>
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Specific gravity, sieve, application thickness, or firing notes"
+                />
+              </label>
+              <VisibilitySelector value={visibility} onChange={setVisibility} />
+            </FormSection>
+          </WizardStepPanel>
+          <WizardActions
+            canSave={canSave}
+            isFirstStep={activeRecipeStep === 0}
+            isFinalStep={isFinalRecipeStep}
+            submitLabel="Save glaze recipe"
+            onBack={() => setRecipeStep((current) => Math.max(0, current - 1))}
+            onCancel={onBack}
+            onNext={() => setRecipeStep((current) => Math.min(recipeSteps.length - 1, current + 1))}
+          />
         </form>
         <aside className="kb-panel kb-flow-sidebar">
           <p className="kb-kicker">Preview</p>
@@ -2694,6 +2736,7 @@ function LiveFiringAddFlow({
 }) {
   const latest = ratePoints.at(-1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [liveStep, setLiveStep] = useState(0);
   const [noteDraft, setNoteDraft] = useState("");
   const [savedNote, setSavedNote] = useState("");
   const [photoName, setPhotoName] = useState("");
@@ -2739,6 +2782,11 @@ function LiveFiringAddFlow({
   const [longitude, setLongitude] = useState(decimalInputValue(environment?.longitude));
   const [setupSaved, setSetupSaved] = useState("");
   const outdoorExposure = isOutdoorKilnLocation(kilnLocation);
+  const liveSteps: WizardStep[] = [
+    { id: "setup", label: "Setup" },
+    { id: "log", label: "Log" },
+  ];
+  const activeLiveStep = Math.min(liveStep, liveSteps.length - 1);
 
   const handleKilnChange = (nextKilnId: string) => {
     const kiln = kilns.find((item) => item.id === nextKilnId);
@@ -2906,6 +2954,8 @@ function LiveFiringAddFlow({
           <span>Add temperature reading</span>
         </button>
       </section>
+      <WizardProgress steps={liveSteps} activeIndex={activeLiveStep} onStepChange={setLiveStep} />
+      <WizardStepPanel active={activeLiveStep === 0}>
       <form className="kb-panel kb-flow-card kb-form kb-live-setup" onSubmit={saveSetup}>
         <div className="kb-section-title compact">
           <div>
@@ -3102,7 +3152,14 @@ function LiveFiringAddFlow({
           </label>
         </div>
         {setupSaved && <p className="kb-muted-note">{setupSaved}</p>}
+        <div className="kb-form-actions">
+          <button type="button" className="kb-primary-button" onClick={() => setLiveStep(1)}>
+            <span>Continue to logging</span>
+          </button>
+        </div>
       </form>
+      </WizardStepPanel>
+      <WizardStepPanel active={activeLiveStep === 1}>
       <div className="kb-flow-layout">
         <form className="kb-panel kb-flow-card kb-form" onSubmit={saveNote}>
           <label>
@@ -3174,6 +3231,7 @@ function LiveFiringAddFlow({
           </p>
         </aside>
       </div>
+      </WizardStepPanel>
     </div>
   );
 }
@@ -3194,6 +3252,7 @@ function PreviousFiringAddFlow({
   onBack: () => void;
   onSave: (payload: PreviousFiringPayload) => void;
 }) {
+  const [previousStep, setPreviousStep] = useState(0);
   const [title, setTitle] = useState("Backfilled cone 6 firing");
   const [kilnId, setKilnId] = useState(kilns[0]?.id ?? "");
   const [glazeId, setGlazeId] = useState(glazes[0]?.id ?? "");
@@ -3203,7 +3262,14 @@ function PreviousFiringAddFlow({
   const [actualStartAt, setActualStartAt] = useState(flow.startedAt.slice(0, 16));
   const [notes, setNotes] = useState("Liked the glaze response; adding the older firing for comparison.");
   const [visibility, setVisibility] = useState<AddVisibility>(flow.visibility);
-  const canSave = title.trim().length >= 3 && kilnId && glazeId && clayBodyId;
+  const canSave = title.trim().length >= 3;
+  const previousSteps: WizardStep[] = [
+    { id: "identity", label: "Identity" },
+    { id: "links", label: "Links" },
+    { id: "details", label: "Details" },
+  ];
+  const activePreviousStep = Math.min(previousStep, previousSteps.length - 1);
+  const isFinalPreviousStep = activePreviousStep === previousSteps.length - 1;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3231,70 +3297,97 @@ function PreviousFiringAddFlow({
         onBack={onBack}
       />
       <form className="kb-panel kb-flow-card kb-form" onSubmit={submit}>
-        <label>
-          <span>Firing name</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} />
-        </label>
-        <div className="kb-form-grid">
-          <label>
-            <span>Date and time</span>
-            <input type="datetime-local" value={actualStartAt} onChange={(event) => setActualStartAt(event.target.value)} />
-          </label>
-          <label>
-            <span>Kiln</span>
-            <span className="kb-select-wrap">
-              <select value={kilnId} onChange={(event) => setKilnId(event.target.value)}>
-                {kilns.map((kiln) => (
-                  <option key={kiln.id} value={kiln.id}>{kiln.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={16} aria-hidden="true" />
-            </span>
-          </label>
-        </div>
-        <div className="kb-form-grid">
-          <label>
-            <span>Glaze</span>
-            <span className="kb-select-wrap">
-              <select value={glazeId} onChange={(event) => setGlazeId(event.target.value)}>
-                {glazes.map((glaze) => (
-                  <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={16} aria-hidden="true" />
-            </span>
-          </label>
-          <label>
-            <span>Clay body</span>
-            <span className="kb-select-wrap">
-              <select value={clayBodyId} onChange={(event) => setClayBodyId(event.target.value)}>
-                {clayBodies.map((clay) => (
-                  <option key={clay.id} value={clay.id}>{clay.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={16} aria-hidden="true" />
-            </span>
-          </label>
-        </div>
-        <div className="kb-form-grid">
-          <label>
-            <span>Target C</span>
-            <input type="number" value={targetTemperatureC} onChange={(event) => setTargetTemperatureC(event.target.value)} />
-          </label>
-          <label>
-            <span>Cone</span>
-            <input value={targetCone} onChange={(event) => setTargetCone(event.target.value)} />
-          </label>
-        </div>
-        <label>
-          <span>What mattered</span>
-          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
-        </label>
-        <VisibilitySelector value={visibility} onChange={setVisibility} />
-        <button type="submit" className="kb-primary-button full" disabled={!canSave}>
-          <Save size={17} />
-          <span>Save previous firing</span>
-        </button>
+        <WizardProgress steps={previousSteps} activeIndex={activePreviousStep} onStepChange={setPreviousStep} />
+        <WizardStepPanel active={activePreviousStep === 0}>
+          <FormSection
+            kicker="Identity"
+            title="Name the firing and set when it happened"
+            description="This can be a rough historical note. You can add exact kiln data later."
+          >
+            <label>
+              <span>Firing name</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} />
+            </label>
+            <label>
+              <span>Date and time</span>
+              <input type="datetime-local" value={actualStartAt} onChange={(event) => setActualStartAt(event.target.value)} />
+            </label>
+          </FormSection>
+        </WizardStepPanel>
+        <WizardStepPanel active={activePreviousStep === 1}>
+          <FormSection
+            kicker="Optional links"
+            title="Connect records if you know them"
+            description="Historic firings can stand alone. Link glaze and clay records only when they make the memory clearer."
+          >
+            <div className="kb-form-grid">
+              <label>
+                <span>Kiln</span>
+                <span className="kb-select-wrap">
+                  <select value={kilnId} onChange={(event) => setKilnId(event.target.value)}>
+                    <option value="">Unknown or unrecorded kiln</option>
+                    {kilns.map((kiln) => (
+                      <option key={kiln.id} value={kiln.id}>{kiln.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+              <label>
+                <span>Glaze</span>
+                <span className="kb-select-wrap">
+                  <select value={glazeId} onChange={(event) => setGlazeId(event.target.value)}>
+                    <option value="">No glaze linked yet</option>
+                    {glazes.map((glaze) => (
+                      <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+            </div>
+            <label>
+              <span>Clay body</span>
+              <span className="kb-select-wrap">
+                <select value={clayBodyId} onChange={(event) => setClayBodyId(event.target.value)}>
+                  <option value="">No clay body linked yet</option>
+                  {clayBodies.map((clay) => (
+                    <option key={clay.id} value={clay.id}>{clay.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          </FormSection>
+        </WizardStepPanel>
+        <WizardStepPanel active={activePreviousStep === 2}>
+          <FormSection kicker="Details" title="Add the firing details you remember">
+            <div className="kb-form-grid">
+              <label>
+                <span>Target C</span>
+                <input type="number" value={targetTemperatureC} onChange={(event) => setTargetTemperatureC(event.target.value)} />
+              </label>
+              <label>
+                <span>Cone</span>
+                <input value={targetCone} onChange={(event) => setTargetCone(event.target.value)} />
+              </label>
+            </div>
+            <label>
+              <span>What mattered</span>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </label>
+            <VisibilitySelector value={visibility} onChange={setVisibility} />
+          </FormSection>
+        </WizardStepPanel>
+        <WizardActions
+          canSave={canSave}
+          isFirstStep={activePreviousStep === 0}
+          isFinalStep={isFinalPreviousStep}
+          submitLabel="Save previous firing"
+          onBack={() => setPreviousStep((current) => Math.max(0, current - 1))}
+          onCancel={onBack}
+          onNext={() => setPreviousStep((current) => Math.min(previousSteps.length - 1, current + 1))}
+        />
       </form>
     </div>
   );
@@ -3317,14 +3410,22 @@ function GlazeResultAddFlow({
   onSave: (payload: GlazeResultPayload) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [resultStep, setResultStep] = useState(0);
   const [title, setTitle] = useState("Glaze result");
-  const [firingId, setFiringId] = useState(firings[0]?.id ?? "");
-  const [glazeId, setGlazeId] = useState(glazes[0]?.id ?? "");
-  const [clayBodyId, setClayBodyId] = useState(clayBodies[0]?.id ?? "");
+  const [firingId, setFiringId] = useState("");
+  const [glazeId, setGlazeId] = useState("");
+  const [clayBodyId, setClayBodyId] = useState("");
   const [rating, setRating] = useState(86);
   const [imageName, setImageName] = useState("");
   const [visibility, setVisibility] = useState<AddVisibility>(flow.visibility);
-  const canSave = title.trim().length >= 3 && firingId && glazeId && clayBodyId;
+  const canSave = title.trim().length >= 3 || Boolean(imageName);
+  const resultSteps: WizardStep[] = [
+    { id: "image", label: "Image" },
+    { id: "links", label: "Links" },
+    { id: "share", label: "Share" },
+  ];
+  const activeResultStep = Math.min(resultStep, resultSteps.length - 1);
+  const isFinalResultStep = activeResultStep === resultSteps.length - 1;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3346,71 +3447,96 @@ function GlazeResultAddFlow({
         icon={Camera}
         kicker="Glaze result"
         title="Add the image, then tag the process behind it."
-        body="Each result can connect to a firing, one glaze, one clay body, and profile visibility."
+        body="A result can start with only a photo and title. Add firing, glaze, or clay-body links when you know them."
         onBack={onBack}
       />
       <div className="kb-flow-layout">
         <form className="kb-panel kb-flow-card kb-form" onSubmit={submit}>
-          <button type="button" className="kb-flow-upload" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={24} />
-            <span>{imageName || "Choose result image"}</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            hidden
-            type="file"
-            accept="image/*"
-            aria-label="Choose glaze result image"
-            onChange={(event) => setImageName(event.target.files?.[0]?.name ?? "")}
+          <WizardProgress steps={resultSteps} activeIndex={activeResultStep} onStepChange={setResultStep} />
+          <WizardStepPanel active={activeResultStep === 0}>
+            <FormSection kicker="Image" title="Start with the visible result">
+              <button type="button" className="kb-flow-upload" onClick={() => fileInputRef.current?.click()}>
+                <Upload size={24} />
+                <span>{imageName || "Choose result image"}</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                hidden
+                type="file"
+                accept="image/*"
+                aria-label="Choose glaze result image"
+                onChange={(event) => setImageName(event.target.files?.[0]?.name ?? "")}
+              />
+              <label>
+                <span>Result title</span>
+                <input value={title} onChange={(event) => setTitle(event.target.value)} />
+              </label>
+            </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeResultStep === 1}>
+            <FormSection
+              kicker="Optional process links"
+              title="Connect firing, glaze, and clay when useful"
+              description="Leave anything blank when the result is from an older or unknown setup."
+            >
+              <div className="kb-form-grid">
+                <label>
+                  <span>Firing</span>
+                  <span className="kb-select-wrap">
+                    <select value={firingId} onChange={(event) => setFiringId(event.target.value)}>
+                      <option value="">No firing linked yet</option>
+                      {firings.map((firing) => (
+                        <option key={firing.id} value={firing.id}>{firing.readableNumber} · {firing.title}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
+                </label>
+                <label>
+                  <span>Glaze</span>
+                  <span className="kb-select-wrap">
+                    <select value={glazeId} onChange={(event) => setGlazeId(event.target.value)}>
+                      <option value="">No glaze linked yet</option>
+                      {glazes.map((glaze) => (
+                        <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
+                </label>
+              </div>
+              <label>
+                <span>Clay body</span>
+                <span className="kb-select-wrap">
+                  <select value={clayBodyId} onChange={(event) => setClayBodyId(event.target.value)}>
+                    <option value="">No clay body linked yet</option>
+                    {clayBodies.map((clay) => (
+                      <option key={clay.id} value={clay.id}>{clay.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </span>
+              </label>
+            </FormSection>
+          </WizardStepPanel>
+          <WizardStepPanel active={activeResultStep === 2}>
+            <FormSection kicker="Share" title="Rate and choose visibility">
+              <label>
+                <span>Result score: {rating}</span>
+                <input type="range" min="1" max="100" value={rating} onChange={(event) => setRating(Number(event.target.value))} />
+              </label>
+              <VisibilitySelector value={visibility} onChange={setVisibility} />
+            </FormSection>
+          </WizardStepPanel>
+          <WizardActions
+            canSave={canSave}
+            isFirstStep={activeResultStep === 0}
+            isFinalStep={isFinalResultStep}
+            submitLabel="Save glaze result"
+            onBack={() => setResultStep((current) => Math.max(0, current - 1))}
+            onCancel={onBack}
+            onNext={() => setResultStep((current) => Math.min(resultSteps.length - 1, current + 1))}
           />
-          <label>
-            <span>Result title</span>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} />
-          </label>
-          <div className="kb-form-grid">
-            <label>
-              <span>Firing</span>
-              <span className="kb-select-wrap">
-                <select value={firingId} onChange={(event) => setFiringId(event.target.value)}>
-                  {firings.map((firing) => (
-                    <option key={firing.id} value={firing.id}>{firing.readableNumber} · {firing.title}</option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-            <label>
-              <span>Glaze</span>
-              <span className="kb-select-wrap">
-                <select value={glazeId} onChange={(event) => setGlazeId(event.target.value)}>
-                  {glazes.map((glaze) => (
-                    <option key={glaze.id} value={glaze.id}>{glaze.name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" />
-              </span>
-            </label>
-          </div>
-          <label>
-            <span>Clay body</span>
-            <span className="kb-select-wrap">
-              <select value={clayBodyId} onChange={(event) => setClayBodyId(event.target.value)}>
-                {clayBodies.map((clay) => (
-                  <option key={clay.id} value={clay.id}>{clay.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={16} aria-hidden="true" />
-            </span>
-          </label>
-          <label>
-            <span>Result score: {rating}</span>
-            <input type="range" min="1" max="100" value={rating} onChange={(event) => setRating(Number(event.target.value))} />
-          </label>
-          <VisibilitySelector value={visibility} onChange={setVisibility} />
-          <button type="submit" className="kb-primary-button full" disabled={!canSave}>
-            <Save size={17} />
-            <span>Save glaze result</span>
-          </button>
         </form>
         <aside className="kb-panel kb-flow-sidebar">
           <p className="kb-kicker">Image tags</p>
@@ -3591,6 +3717,7 @@ function PostComposer({
   onCreateKilnProfile: () => KilnProfile;
 }) {
   const [postText, setPostText] = useState("");
+  const [composerStep, setComposerStep] = useState(0);
   const [publishNotice, setPublishNotice] = useState("");
   const [selectedFiringId, setSelectedFiringId] = useState("");
   const [selectedGlazeIds, setSelectedGlazeIds] = useState<string[]>([]);
@@ -3635,6 +3762,13 @@ function PostComposer({
     selectedKilnIds.length > 0 ||
     composerImages.length > 0 ||
     hasImageAnnotations;
+  const postSteps: WizardStep[] = [
+    { id: "story", label: "Story" },
+    { id: "records", label: "Records" },
+    { id: "images", label: "Images" },
+  ];
+  const activeComposerStep = Math.min(composerStep, postSteps.length - 1);
+  const isFinalComposerStep = activeComposerStep === postSteps.length - 1;
 
   const addUnique = (values: string[], value: string) =>
     value && !values.includes(value) ? [...values, value] : values;
@@ -3835,16 +3969,32 @@ function PostComposer({
 
   return (
     <form className="kb-composer" onSubmit={handlePublish}>
-      <label>
-        <span className="sr-only">Post text</span>
-        <textarea
-          value={postText}
-          onChange={(event) => setPostText(event.target.value)}
-          placeholder="Write the story. Add broad context for the post or tag exact result groups inside each image."
-          rows={3}
-        />
-      </label>
-      <div className="kb-composer-grid">
+      <WizardProgress steps={postSteps} activeIndex={activeComposerStep} onStepChange={setComposerStep} />
+      <WizardStepPanel active={activeComposerStep === 0}>
+        <section className="kb-compose-module kb-composer-story-panel">
+          <div className="kb-module-head">
+            <div>
+              <p className="kb-kicker">Story</p>
+              <strong>Write the post first</strong>
+            </div>
+            <VisibilityPill visibility={visibility} />
+          </div>
+          <label>
+            <span className="sr-only">Post text</span>
+            <textarea
+              value={postText}
+              onChange={(event) => setPostText(event.target.value)}
+              placeholder="What happened in the kiln? Share the result, question, or observation."
+              rows={5}
+            />
+          </label>
+          <p className="kb-muted-note">
+            You can publish a lightweight post, then add firings, glazes, clay bodies, or image-specific result groups in the next steps.
+          </p>
+        </section>
+      </WizardStepPanel>
+      <WizardStepPanel active={activeComposerStep === 1}>
+      <div className="kb-composer-grid single">
         <section className="kb-compose-module" aria-labelledby="post-record-links">
           <div className="kb-module-head">
             <div>
@@ -4007,6 +4157,10 @@ function PostComposer({
               )}
           </div>
         </section>
+      </div>
+      </WizardStepPanel>
+      <WizardStepPanel active={activeComposerStep === 2}>
+      <div className="kb-composer-grid single">
         <section className="kb-compose-module" aria-labelledby="post-image-tags">
           <div className="kb-module-head">
             <div>
@@ -4195,12 +4349,34 @@ function PostComposer({
           </div>
         </section>
       </div>
+      </WizardStepPanel>
       <div className="kb-composer-footer">
         <p>Public previews read from canonical records and only include fields the viewer is authorized to see.</p>
-        <button type="submit" className="kb-primary-button" disabled={!canPublish}>
-          <Send size={17} />
-          <span>Publish</span>
-        </button>
+        <div className="kb-composer-footer-actions">
+          {activeComposerStep > 0 && (
+            <button
+              type="button"
+              className="kb-quiet-button"
+              onClick={() => setComposerStep((current) => Math.max(0, current - 1))}
+            >
+              Back
+            </button>
+          )}
+          {isFinalComposerStep ? (
+            <button type="submit" className="kb-primary-button" disabled={!canPublish}>
+              <Send size={17} />
+              <span>Publish</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="kb-primary-button"
+              onClick={() => setComposerStep((current) => Math.min(postSteps.length - 1, current + 1))}
+            >
+              <span>Next</span>
+            </button>
+          )}
+        </div>
       </div>
       {publishNotice && <p className="kb-muted-note">{publishNotice}</p>}
     </form>
@@ -5585,9 +5761,9 @@ function GlazeCreateDialog({
   const totalPercentage = parsedIngredients.reduce((sum, ingredient) => sum + ingredient.percentageValue, 0);
   const canSave = name.trim().length >= 2 && (mode === "commercial" || parsedIngredients.length > 0);
   const glazeSteps: WizardStep[] = [
-    { id: "basics", label: "Basics" },
-    { id: "fit", label: "Fit" },
-    { id: mode === "recipe" ? "recipe" : "product", label: mode === "recipe" ? "Recipe" : "Product" },
+    { id: "basics", label: "Name" },
+    { id: "fit", label: "Firing" },
+    { id: mode === "recipe" ? "recipe" : "product", label: mode === "recipe" ? "Formula" : "Product" },
     { id: "notes", label: "Notes" },
     { id: "share", label: "Share" },
   ];
@@ -5976,21 +6152,26 @@ function GlazeCreateDialog({
               </label>
             </div>
           </FormSection>
-          <FormSection
-            kicker="Marketplace"
-            title="Optional selling details"
-            description="Use this only when the glaze should appear as something people can buy or request from your profile."
-          >
-            <div className="kb-marketplace-builder">
-              <label className="kb-checkbox-row standalone option-card">
+          <details className="kb-optional-details">
+            <summary>
+              <span>Marketplace</span>
+              <small>Optional selling details</small>
+            </summary>
+            <FormSection
+              kicker="Marketplace"
+              title="Sell or request this glaze from your profile"
+              description="Use this only when the glaze should appear as something people can buy or request from your profile."
+            >
+              <div className="kb-marketplace-builder">
+                <label className="kb-checkbox-row standalone option-card">
               <input
                 type="checkbox"
                 checked={marketplaceEnabled}
                 onChange={(event) => setMarketplaceEnabled(event.target.checked)}
               />
               <span>List this glaze on the global marketplace</span>
-              </label>
-              {marketplaceEnabled && (
+                </label>
+                {marketplaceEnabled && (
                 <>
                   <div className="kb-module-head">
                     <div>
@@ -6082,9 +6263,10 @@ function GlazeCreateDialog({
                     </label>
                   </div>
                 </>
-              )}
-            </div>
-          </FormSection>
+                )}
+              </div>
+            </FormSection>
+          </details>
           <FormSection kicker="Visual" title="Pick the glaze swatch color">
             <div className="kb-swatch-picker" aria-label="Profile swatch color">
               {PROFILE_SWATCHES.map((color) => (
@@ -6310,21 +6492,29 @@ function ClayBodyCreateDialog({
                 <span>Fired color</span>
                 <input value={firedColor} onChange={(event) => setFiredColor(event.target.value)} />
               </label>
-              <label>
-                <span>Grog %</span>
-                <input type="number" inputMode="decimal" value={grogPercentage} onChange={(event) => setGrogPercentage(event.target.value)} />
-              </label>
             </div>
-            <div className="kb-form-grid">
-              <label>
-                <span>Absorption %</span>
-                <input type="number" inputMode="decimal" value={absorptionPercentage} onChange={(event) => setAbsorptionPercentage(event.target.value)} />
-              </label>
-              <label>
-                <span>Shrinkage %</span>
-                <input type="number" inputMode="decimal" value={shrinkagePercentage} onChange={(event) => setShrinkagePercentage(event.target.value)} />
-              </label>
-            </div>
+            <details className="kb-optional-details">
+              <summary>
+                <span>Advanced material details</span>
+                <small>Grog, absorption, shrinkage</small>
+              </summary>
+              <div className="kb-form-section">
+                <div className="kb-form-grid three">
+                  <label>
+                    <span>Grog %</span>
+                    <input type="number" inputMode="decimal" value={grogPercentage} onChange={(event) => setGrogPercentage(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Absorption %</span>
+                    <input type="number" inputMode="decimal" value={absorptionPercentage} onChange={(event) => setAbsorptionPercentage(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Shrinkage %</span>
+                    <input type="number" inputMode="decimal" value={shrinkagePercentage} onChange={(event) => setShrinkagePercentage(event.target.value)} />
+                  </label>
+                </div>
+              </div>
+            </details>
           </FormSection>
           </WizardStepPanel>
           <WizardStepPanel active={activeStep === 2}>
@@ -6424,10 +6614,10 @@ function KilnCreateDialog({
   const canSave = name.trim().length >= 2;
   const kilnSteps: WizardStep[] = [
     { id: "preset", label: "Preset" },
-    { id: "identity", label: "Identity" },
-    { id: "setup", label: "Setup" },
-    { id: "capacity", label: "Capacity" },
-    { id: "location", label: "Location" },
+    { id: "identity", label: "Name" },
+    { id: "setup", label: "Type" },
+    { id: "capacity", label: "Limits" },
+    { id: "location", label: "Place" },
     { id: "notes", label: "Notes" },
   ];
   const activeStep = Math.min(stepIndex, kilnSteps.length - 1);
@@ -7092,15 +7282,14 @@ function AuthGate({
   title,
   body,
   authStatus,
-  onGoogleSignIn,
+  onOpenAuth,
 }: {
   eyebrow: string;
   title: string;
   body: string;
   authStatus: AuthStatus;
-  onGoogleSignIn: () => void;
+  onOpenAuth: () => void;
 }) {
-  const disabled = authStatus.state === "loading" || authStatus.state === "unconfigured";
   return (
     <section className="kb-panel kb-auth-gate">
       <div className="kb-empty-state">
@@ -7111,12 +7300,11 @@ function AuthGate({
         <button
           type="button"
           className="kb-primary-button"
-          onClick={onGoogleSignIn}
-          disabled={disabled}
+          onClick={onOpenAuth}
           title={authStatus.state === "unconfigured" || authStatus.state === "error" ? authStatus.message : undefined}
         >
           <Mail size={17} />
-          <span>{authStatus.state === "loading" ? "Checking session" : "Sign in with Google"}</span>
+          <span>{authStatus.state === "loading" ? "Checking session" : "Sign in"}</span>
         </button>
       </div>
     </section>
@@ -7130,7 +7318,7 @@ function ProfileScreen({
   posts,
   drafts,
   onOpenSettings,
-  onGoogleSignIn,
+  onOpenAuth,
 }: {
   viewer: Profile;
   authStatus: AuthStatus;
@@ -7138,7 +7326,7 @@ function ProfileScreen({
   posts: Post[];
   drafts: AddDraft[];
   onOpenSettings: () => void;
-  onGoogleSignIn: () => void;
+  onOpenAuth: () => void;
 }) {
   if (authStatus.state !== "signed-in") {
     return (
@@ -7147,7 +7335,7 @@ function ProfileScreen({
         title="Sign in to create your profile"
         body="Your public identity, private recipes, firing records, and saved glaze results belong under your account. Public browsing stays available without signing in."
         authStatus={authStatus}
-        onGoogleSignIn={onGoogleSignIn}
+        onOpenAuth={onOpenAuth}
       />
     );
   }
@@ -7337,11 +7525,11 @@ function ProfileScreen({
 function SettingsScreen({
   viewer,
   authStatus,
-  onGoogleSignIn,
+  onOpenAuth,
 }: {
   viewer: Profile;
   authStatus: AuthStatus;
-  onGoogleSignIn: () => void;
+  onOpenAuth: () => void;
 }) {
   if (authStatus.state !== "signed-in") {
     return (
@@ -7350,7 +7538,7 @@ function SettingsScreen({
         title="Sign in to manage account settings"
         body="Authentication, privacy, notification, and subscription settings are only available after you connect a Supabase account."
         authStatus={authStatus}
-        onGoogleSignIn={onGoogleSignIn}
+        onOpenAuth={onOpenAuth}
       />
     );
   }
